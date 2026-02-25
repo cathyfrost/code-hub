@@ -1,38 +1,34 @@
-"use client";
+"use client"
 
-import { signUpSchema, SignUpValues } from "@/lib/validation";
+import { loginSchema, LoginValues } from "@/lib/validation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form";
-import {zodResolver} from "@hookform/resolvers/zod"
+import { login } from "./action";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useState, useTransition } from "react";
-import { signUp } from "./action";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import LoadingButton from "@/components/ui/LoadingButton";
 
-export default function SignUpForm(){
-
-    const [error, setError] = useState<string>();
-
+export default function LoginForm(){
+    const [error,setError] = useState<string>();
+    
     const [isPending, startTransition] = useTransition();
 
-    const form = useForm<SignUpValues>({
-        resolver: zodResolver(signUpSchema),
-        defaultValues: {
-            email:"",
-            username:"",
-            password:""
-        }
+    const form = useForm<LoginValues>({
+        resolver: zodResolver(loginSchema),
+        defaultValues:{
+            username: "",
+            password: "",
+        },    
     });
 
-    async function onSubmit(values:SignUpValues) {
-        setError(undefined);
-        startTransition(async ()=>{
-            const {error} = await signUp(values);
+    async function onSubmit(values:LoginValues) {
+        setError(undefined)
+        startTransition(async ()=> {
+            const {error} = await login(values);
             if(error) setError(error);
         })
-        
     }
 
     return <Form {...form}>
@@ -46,19 +42,6 @@ export default function SignUpForm(){
                         <FormLabel>用户名</FormLabel>
                         <FormControl>
                             <Input placeholder="请输入用户名" {...field} />
-                        </FormControl>
-                        <FormMessage/>
-                    </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="email"
-                render={({field})=>(
-                    <FormItem>
-                        <FormLabel>邮箱</FormLabel>
-                        <FormControl>
-                            <Input placeholder="请输入邮箱" type="email"{...field} />
                         </FormControl>
                         <FormMessage/>
                     </FormItem>
@@ -80,7 +63,7 @@ export default function SignUpForm(){
             <LoadingButton 
             loading={isPending}
             type="submit" className="w-full">
-                创建账号
+                登录
             </LoadingButton>
         </form>
     </Form>
