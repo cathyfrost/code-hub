@@ -25,7 +25,7 @@ export async function login(
 
         if(!existingUser || !existingUser.passwordHash) {
             return {
-                error: "Incorrect username or passowrd"
+                error: "用户名或密码错误"
             }
         }
 
@@ -38,7 +38,7 @@ export async function login(
 
         if(!validPassword){
             return {
-                error: "Incorrect username or passowrd"
+                error: "用户名或密码错误"
             }
         }
 
@@ -58,7 +58,7 @@ export async function login(
         if(isRedirectError(error)) throw error;
         console.error(error);
         return {
-            error: "Something went wrong. Please try again.",
+            error: "出错了，请重试。",
         }
     }
 }

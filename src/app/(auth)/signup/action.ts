@@ -34,7 +34,7 @@ export async function signUp(
 
         if (existingUsername) {
           return {
-            error: "Username already taken",
+            error: "该用户名已被使用",
           };
         }
 
@@ -49,7 +49,7 @@ export async function signUp(
 
         if (existingEmail) {
           return {
-            error: "Email already taken",
+            error: "该邮箱已被注册",
           };
         }
 
@@ -81,7 +81,7 @@ export async function signUp(
         if(isRedirectError(error)) throw error;
         console.error(error);
         return {
-            error: "Something went wrong. Please try again."
+            error: "出错了，请重试。"
         }
     }
 }
