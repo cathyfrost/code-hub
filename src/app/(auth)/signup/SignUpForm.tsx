@@ -7,8 +7,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useState, useTransition } from "react";
 import { signUp } from "./action";
-import { PasswordInput } from "@/components/ui/PasswordInput";
-import LoadingButton from "@/components/ui/LoadingButton";
+import { PasswordInput } from "@/components/PasswordInput";
+import LoadingButton from "@/components/LoadingButton";
 
 export default function SignUpForm(){
 
