@@ -8,7 +8,7 @@ interface UserAvatarProps {
     className?: string
 }
 
-export default function UseAvatar({
+export default function UserAvatar({
     avatarUrl,
     size,
     className
