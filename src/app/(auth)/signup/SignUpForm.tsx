@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useState, useTransition } from "react";
 import { signUp } from "./action";
 import { PasswordInput } from "@/components/ui/PasswordInput";
