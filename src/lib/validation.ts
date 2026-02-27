@@ -8,7 +8,7 @@ export const signUpSchema = z.object({
         /^[a-zA-Z0-9_-]+$/,
         "只允许字母、数字、- 和 _"
     ),
-    password: requiredString.min(8, "Must be at least 8 characters")
+    password: requiredString.min(8, "不少于8位")
 });
 
 export type SignUpValues = z.infer<typeof signUpSchema>;
