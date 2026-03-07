@@ -81,7 +81,7 @@ export async function signUp(
         if(isRedirectError(error)) throw error;
         console.error(error);
         return {
-            error: "出错了，请重试。"
+            error: "出错啦，请重试。"
         }
     }
 }

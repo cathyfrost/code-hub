@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Bell, Bookmark, Home, Mail, Code, PenTool, Bot } from "lucide-react"
+import { Bell, Bookmark, Home, Mail, Code, PenTool, Bot, BarChart3 } from "lucide-react"
 import Link from "next/link"
 
 interface MenuBarProps{
@@ -76,6 +76,16 @@ export default function MenuBar({className}: MenuBarProps){
             <Link href="/ai-assistant">
             <Bot />
             <span className="hidden lg:inline">AI助手</span>
+            </Link>
+        </Button>
+        <Button
+        variant="ghost"
+        className="flex items-center justify-start gap-3"
+        title="数据分析"
+        asChild>
+            <Link href="/analytics">
+            <BarChart3 />
+            <span className="hidden lg:inline">数据分析</span>
             </Link>
         </Button>
     </div>

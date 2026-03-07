@@ -1,13 +1,13 @@
 import { validateRequest } from "@/auth"
 import prisma from "@/lib/prisma";
-import { userDataSelect } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import UserAvatar from "./UserAvatar";
-import { Button } from "./ui/button";
 import { unstable_cache } from "next/cache";
 import { formatNumber } from "@/lib/utils";
+import FollowButton from "./FollowButton";
+import { getUserDataSelect } from "@/lib/types";
 
 export default function TrendsSidebar(){
     return (
@@ -29,14 +29,19 @@ async function WhoToFollow() {
         where: {
             NOT: {
                 id: user.id
+            },
+            followers: {
+                none: {
+                    followerId: user.id,
+                }
             }
         },
-        select: userDataSelect,
+        select: getUserDataSelect(user.id),
         take: 5
     })
 
     return (<div className='space-y-5 rounded-2xl bg-card p-5 shadow-sm'>
-        <div className='text-xl font-bold'>猜你喜欢</div>
+        <div className=' font-bold'>推荐关注</div>
         {usersToFollow.map(user =>(
             <div key={user.id} 
             className="flex items-center justify-between gap-3"
@@ -54,7 +59,15 @@ async function WhoToFollow() {
                         </p>
                     </div>
                 </Link>
-                <Button>关注</Button>
+                <FollowButton 
+                userId={user.id}
+                initialState={{
+                    followers: user._count.followers,
+                    isFollowedByUser: user.followers.some(
+                        ({followerId}) => followerId === user.id,
+                    )
+                }}
+                />
             </div>
         ))}
     </div>
@@ -86,7 +99,7 @@ async function TrendingTopics() {
     const TrendingTopics = await getTrendingTopics();
     
     return <div className="space-y-5 rounded-2xl bg-card p-5 shadow-sm">
-        <div className='text-xl font-bold'>热门话题</div>
+        <div className='font-bold'>大家都在聊这些</div>
         {TrendingTopics.map(({hashtag, count}) => {
             const title = hashtag.split("#")[1];
 
