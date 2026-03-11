@@ -24,3 +24,10 @@ export const createPostSchema = z.object({
     content: requiredString,
     
 })
+
+export const updateUserProfileSchema = z.object({
+    displayName: requiredString,
+    bio: z.string().max(1000, "最多1000个字符")
+});
+
+export type UpdateUserProfileValues = z.infer<typeof updateUserProfileSchema>;

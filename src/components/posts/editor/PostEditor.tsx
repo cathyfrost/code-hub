@@ -107,7 +107,7 @@ export default function PostEditor(){
               发表
             </span>
             <span className={cn(
-              "absolute right-[calc(50%-10px)] transition-all duration-300 delay-[400ms]",
+              "absolute right-[calc(50%-10px)] transition-all duration-300 delay-&lsqb;400ms&rsqb;",
               flyOut ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
             )}>
               发表
