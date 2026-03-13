@@ -22,12 +22,12 @@ export type LoginValues = z.infer<typeof loginSchema>;
 
 export const createPostSchema = z.object({
     content: requiredString,
-    
+    mediaIds: z.array(z.string()).max(5, "附件数量不能超过5个")
 })
 
 export const updateUserProfileSchema = z.object({
     displayName: requiredString,
-    bio: z.string().max(1000, "最多1000个字符")
+    bio: z.string().max(1000, "最多1000个字符"),
 });
 
 export type UpdateUserProfileValues = z.infer<typeof updateUserProfileSchema>;

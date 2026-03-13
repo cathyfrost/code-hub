@@ -53,7 +53,26 @@ model Post {
   content  String
   userId   String
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments Media[]
+
   createAt DateTime @default(now())
 
   @@map("posts")
+}
+
+model Media{
+  id       String   @id @default(cuid())
+  postId String?
+  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  type MediaType
+  url String
+
+  createAt DateTime @default(now())
+
+  @@map("post_media")
+}
+
+enum MediaType{
+  IMAGE
+  VIDEO
 }

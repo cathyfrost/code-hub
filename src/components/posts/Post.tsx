@@ -3,7 +3,7 @@
 import { PostData } from "@/lib/types";
 import Link from "next/link";
 import UserAvatar from "../UserAvatar";
-import { formatRelativeDate } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useState } from "react";
@@ -12,6 +12,8 @@ import { useSession } from "@/app/(main)/SessionProvider";
 import PostMoreButton from "./PostMoreButton";
 import Linkify from "../Linkify";
 import UserTooltip from "../UserTooltip";
+import { Media } from "@prisma/client";
+import Image from "next/image";
 
 interface PostProps {
   post: PostData;
@@ -41,7 +43,7 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-function AIAnalyzeButton({ content }: { content: string }) {
+function AIAnalyzeButton({ content, imageUrls }: { content: string; imageUrls: string[] }) {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ function AIAnalyzeButton({ content }: { content: string }) {
       const res = await fetch("/api/ai-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content ,imageUrls}),
       });
 
       if (!res.ok) {
@@ -204,7 +206,57 @@ export default function Post({ post }: PostProps) {
       <Linkify>
         <div className="space-y-3">{renderContent(post.content)}</div>
       </Linkify>
-      <AIAnalyzeButton content={post.content} />
+      {!!post.attachments.length && (
+        <MediaPreviews attachments={post.attachments} />
+      )}
+      <AIAnalyzeButton
+        content={post.content}
+        imageUrls={post.attachments
+          .filter((a) => a.type === "IMAGE")
+          .map((a) => a.url)}
+      />
     </article>
   );
+}
+
+interface MediaPreviewsProps{
+  attachments: Media[];
+}
+
+function MediaPreviews({attachments}: MediaPreviewsProps){
+  return(
+  <div className={cn("flex flex-col gap-3", attachments.length > 1 && "sm:grid sm:grid-cols-2")}>
+    {attachments.map(m => (
+      <MediaPreview key={m.id} media={m} />
+    ))}
+  </div>
+  )
+}
+
+interface MediaPreviewProps{
+  media: Media
+}
+
+function MediaPreview({media}: MediaPreviewProps){
+  if(media.type === "IMAGE"){
+    return <Image
+    src={media.url}
+    alt="Attachment"
+    width={500}
+    height={500}
+    className="mx-auto size-fit max-h-[30rem] rounded-2xl"
+    />
+  }
+
+  if(media.type === "VIDEO"){
+    return <div>
+      <video 
+        src={media.url}
+        controls
+        className="mx-auto size-fit max-h-[30rem] rounded-2xl"
+      />
+    </div>
+  }
+
+  return <p className="text-destructive">不支持的视频类型</p>
 }
