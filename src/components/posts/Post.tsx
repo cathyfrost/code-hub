@@ -7,13 +7,23 @@ import { cn, formatRelativeDate } from "@/lib/utils";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useState } from "react";
-import { Copy, Check, Sparkles, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Sparkles,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Download,
+} from "lucide-react";
 import { useSession } from "@/app/(main)/SessionProvider";
 import PostMoreButton from "./PostMoreButton";
 import Linkify from "../Linkify";
 import UserTooltip from "../UserTooltip";
 import { Media } from "@prisma/client";
 import Image from "next/image";
+import LikeButton from "./LikeButton";
 
 interface PostProps {
   post: PostData;
@@ -31,7 +41,7 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute right-2 top-2 rounded-md bg-muted-foreground/20 p-1.5 transition-colors hover:bg-muted-foreground/40"
+      className="absolute right-2 top-2 z-10 rounded-md bg-muted-foreground/20 p-1.5 transition-colors hover:bg-muted-foreground/40"
       title="复制代码"
     >
       {copied ? (
@@ -43,28 +53,34 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-function AIAnalyzeButton({ content, imageUrls }: { content: string; imageUrls: string[] }) {
+function AIAnalyzeButton({
+  content,
+  imageUrls,
+}: {
+  content: string;
+  imageUrls: string[];
+}) {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
   function stripMarkdown(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, "")     // 删除代码块
-    .replace(/`([^`]+)`/g, "$1")         // 行内代码 → 纯文本
-    .replace(/#{1,6}\s+/g, "")           // 删除标题 #
-    .replace(/\*\*(.+?)\*\*/g, "$1")     // 粗体 → 纯文本
-    .replace(/\*(.+?)\*/g, "$1")         // 斜体 → 纯文本
-    .replace(/~~(.+?)~~/g, "$1")         // 删除线 → 纯文本
-    .replace(/^[-*+]\s+/gm, "")          // 无序列表符号
-    .replace(/^\d+\.\s+/gm, "")          // 有序列表序号
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // 链接 → 纯文本
-    .replace(/^>\s+/gm, "")              // 引用符号
-    .replace(/---+/g, "")                // 分割线
-    .replace(/\n{3,}/g, "\n\n")          // 多余空行压缩
-    .trim();
-}
+    return text
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/~~(.+?)~~/g, "$1")
+      .replace(/^[-*+]\s+/gm, "")
+      .replace(/^\d+\.\s+/gm, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/^>\s+/gm, "")
+      .replace(/---+/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
 
   async function handleAnalyze() {
     if (result) {
@@ -79,7 +95,7 @@ function AIAnalyzeButton({ content, imageUrls }: { content: string; imageUrls: s
       const res = await fetch("/api/ai-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content ,imageUrls}),
+        body: JSON.stringify({ content, imageUrls }),
       });
 
       if (!res.ok) {
@@ -132,6 +148,77 @@ function AIAnalyzeButton({ content, imageUrls }: { content: string; imageUrls: s
   );
 }
 
+// ── 超过此行数的代码块默认收起 ──
+const CODE_COLLAPSE_THRESHOLD = 10;
+
+function CollapsibleCodeBlock({
+  language,
+  code,
+}: {
+  language: string;
+  code: string;
+}) {
+  const lineCount = code.split("\n").length;
+  const shouldCollapse = lineCount > CODE_COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(!shouldCollapse);
+
+  return (
+    <div className="relative">
+      <div className="flex items-center justify-between rounded-t-xl bg-[#282c34] px-4 py-1.5 text-xs text-gray-400">
+        <span>
+          {language.toUpperCase()} · {lineCount} 行
+        </span>
+        {shouldCollapse && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 transition-colors hover:text-gray-200"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="size-3.5" />
+                收起代码
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-3.5" />
+                展开代码
+              </>
+            )}
+          </button>
+        )}
+      </div>
+      <div className="relative">
+        <CopyButton code={code} />
+        <div
+          className={cn(
+            "overflow-hidden transition-all duration-300",
+            !expanded && "max-h-[240px]",
+          )}
+        >
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            className="!mt-0 !rounded-t-none rounded-b-xl text-sm"
+          >
+            {code}
+          </SyntaxHighlighter>
+        </div>
+        {!expanded && (
+          <div
+            onClick={() => setExpanded(true)}
+            className="absolute inset-x-0 bottom-0 flex cursor-pointer items-end justify-center rounded-b-xl bg-gradient-to-t from-[#282c34] via-[#282c34]/80 to-transparent pb-2 pt-10 text-xs text-gray-400 transition-colors hover:text-gray-200"
+          >
+            <span className="flex items-center gap-1">
+              <ChevronDown className="size-3.5" />
+              点击展开剩余 {lineCount - CODE_COLLAPSE_THRESHOLD} 行
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function renderContent(content: string) {
   const parts = content.split(/(```\w*\n[\s\S]*?```)/);
 
@@ -141,16 +228,7 @@ function renderContent(content: string) {
       const language = codeMatch[1] || "text";
       const code = codeMatch[2].trimEnd();
       return (
-        <div key={i} className="relative">
-          <CopyButton code={code} />
-          <SyntaxHighlighter
-            language={language}
-            style={oneDark}
-            className="rounded-xl text-sm"
-          >
-            {code}
-          </SyntaxHighlighter>
-        </div>
+        <CollapsibleCodeBlock key={i} language={language} code={code} />
       );
     }
     return part.trim() ? (
@@ -159,6 +237,97 @@ function renderContent(content: string) {
       </span>
     ) : null;
   });
+}
+
+// ── 图片灯箱弹窗 ──
+function ImageLightbox({
+  src,
+  onClose,
+}: {
+  src: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyImage() {
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 降级：复制图片链接
+      await navigator.clipboard.writeText(src);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  async function handleDownload() {
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = src.split("/").pop() || "image";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(src, "_blank");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* 顶部工具栏 */}
+      <div
+        className="fixed right-4 top-4 z-50 flex items-center gap-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={handleCopyImage}
+          className="rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20"
+          title="复制图片"
+        >
+          {copied ? (
+            <Check className="size-5 text-green-400" />
+          ) : (
+            <Copy className="size-5" />
+          )}
+        </button>
+        <button
+          onClick={handleDownload}
+          className="rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20"
+          title="下载图片"
+        >
+          <Download className="size-5" />
+        </button>
+        <button
+          onClick={onClose}
+          className="rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20"
+          title="关闭"
+        >
+          <X className="size-5" />
+        </button>
+      </div>
+      {/* 图片 */}
+      <img
+        src={src}
+        alt="预览大图"
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
 }
 
 export default function Post({ post }: PostProps) {
@@ -216,48 +385,76 @@ export default function Post({ post }: PostProps) {
           .filter((a) => a.type === "IMAGE")
           .map((a) => a.url)}
       />
+      <hr className="text-muted-foreground" />
+      <LikeButton
+        postId={post.id}
+        initialState={{
+          likes: post._count.likes,
+          isLikedByUser: post.likes.some((like) => like.userId === user.id),
+        }}
+      />
     </article>
   );
 }
 
-interface MediaPreviewsProps{
+interface MediaPreviewsProps {
   attachments: Media[];
 }
 
-function MediaPreviews({attachments}: MediaPreviewsProps){
-  return(
-  <div className={cn("flex flex-col gap-3", attachments.length > 1 && "sm:grid sm:grid-cols-2")}>
-    {attachments.map(m => (
-      <MediaPreview key={m.id} media={m} />
-    ))}
-  </div>
-  )
-}
-
-interface MediaPreviewProps{
-  media: Media
-}
-
-function MediaPreview({media}: MediaPreviewProps){
-  if(media.type === "IMAGE"){
-    return <Image
-    src={media.url}
-    alt="Attachment"
-    width={500}
-    height={500}
-    className="mx-auto size-fit max-h-[30rem] rounded-2xl"
-    />
-  }
-
-  if(media.type === "VIDEO"){
-    return <div>
-      <video 
-        src={media.url}
-        controls
-        className="mx-auto size-fit max-h-[30rem] rounded-2xl"
-      />
+function MediaPreviews({ attachments }: MediaPreviewsProps) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        attachments.length > 1 && "sm:grid sm:grid-cols-2",
+      )}
+    >
+      {attachments.map((m) => (
+        <MediaPreview key={m.id} media={m} />
+      ))}
     </div>
+  );
+}
+
+interface MediaPreviewProps {
+  media: Media;
+}
+
+function MediaPreview({ media }: MediaPreviewProps) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  if (media.type === "IMAGE") {
+    return (
+      <>
+        <Image
+          src={media.url}
+          alt="Attachment"
+          width={500}
+          height={500}
+          className="mx-auto size-fit max-h-[30rem] cursor-zoom-in rounded-2xl transition-opacity hover:opacity-90"
+          onClick={() => setLightboxOpen(true)}
+        />
+        {lightboxOpen && (
+          <ImageLightbox
+            src={media.url}
+            onClose={() => setLightboxOpen(false)}
+          />
+        )}
+      </>
+    );
   }
 
-  return <p className="text-destructive">不支持的视频类型</p>
+  if (media.type === "VIDEO") {
+    return (
+      <div>
+        <video
+          src={media.url}
+          controls
+          className="mx-auto size-fit max-h-[30rem] rounded-2xl"
+        />
+      </div>
+    );
+  }
+
+  return <p className="text-destructive">不支持的视频类型</p>;
 }
