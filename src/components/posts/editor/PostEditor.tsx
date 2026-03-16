@@ -256,12 +256,32 @@ export default function PostEditor() {
       StarterKi.configure({
         bold: false,
         italic: false,
+        codeBlock: false,
       }),
       Placeholder.configure({
         placeholder: "聊一聊今天遇到的难题...",
       }),
     ],
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    const params = new URLSearchParams(window.location.search);
+    const sharedCode = params.get("code");
+    const sharedLang = params.get("lang");
+    if (sharedCode) {
+      const decoded = decodeURIComponent(sharedCode);
+      const codeBlock = "```" + (sharedLang || "text") + "\n" + decoded + "\n```";
+      const lines = codeBlock.split("\n");
+      const content = lines.map((line) => ({
+        type: "paragraph" as const,
+        content: line ? [{ type: "text" as const, text: line }] : [],
+      }));
+      editor.commands.setContent({ type: "doc", content });
+      editor.commands.focus("end");
+      window.history.replaceState({}, "", "/");
+    }
+  }, [editor]);
 
   const input =
     editor?.getText({

@@ -20,7 +20,11 @@ import {
   Sparkles,
   Clock,
   HardDrive,
+  MessageSquare,
+  FileEdit,
 } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 
 const LANGUAGES = [
   { value: "cpp", label: "C++", monacoId: "cpp", runnable: true },
@@ -62,12 +66,15 @@ const AI_ACTIONS = [
 type EditorInstance = Parameters<OnMount>[0];
 
 export default function CodePlayground() {
+  const { resolvedTheme: appTheme } = useTheme();
+  const router = useRouter();
   const [language, setLanguage] = useState("cpp");
   const [code, setCode] = useState(DEFAULT_CODE["cpp"]);
   const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [outputCollapsed, setOutputCollapsed] = useState(false);
@@ -278,7 +285,7 @@ export default function CodePlayground() {
                 <Bot className="h-3.5 w-3.5" />
               </Button>
               {showAI && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-32 rounded-lg border bg-card p-1 shadow-lg">
+                <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-xl border bg-popover p-1.5 shadow-md animate-in fade-in-0 zoom-in-95">
                   {AI_ACTIONS.map((action) => (
                     <button
                       key={action.value}
@@ -294,9 +301,40 @@ export default function CodePlayground() {
               )}
             </div>
 
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="分享到帖子">
-              <Share2 className="h-3.5 w-3.5" />
-            </Button>
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setShowShare(!showShare)}
+                title="分享代码"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+              </Button>
+              {showShare && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-xl border bg-popover p-1.5 shadow-md animate-in fade-in-0 zoom-in-95">
+                  <button
+                    onClick={() => {
+                      setShowShare(false);
+                      const encoded = encodeURIComponent(code);
+                      router.push(`/?code=${encoded}&lang=${language}`);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent transition-colors"
+                  >
+                    <FileEdit className="h-3.5 w-3.5" />
+                    分享到帖子
+                  </button>
+                  <button
+                    disabled
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground cursor-not-allowed"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    分享到聊天室
+                    <span className="ml-auto text-[10px]">即将上线</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="mx-1 h-4 w-px bg-border" />
 
@@ -320,7 +358,7 @@ export default function CodePlayground() {
             value={code}
             onChange={(val) => setCode(val || "")}
             onMount={handleEditorMount}
-            theme="light"
+            theme={appTheme === "dark" ? "vs-dark" : "light"}
             options={{
               minimap: { enabled: false },
               fontSize: 14,
@@ -348,7 +386,6 @@ export default function CodePlayground() {
         className="rounded-xl border bg-card overflow-hidden flex-none flex flex-col"
         style={{ height: outputCollapsed ? 40 : outputHeight }}
       >
-        {/* 拖拽条 */}
         {!outputCollapsed && (
           <div
             onMouseDown={handleDragStart}
@@ -358,7 +395,6 @@ export default function CodePlayground() {
           </div>
         )}
 
-        {/* 输出头部 */}
         <div className="flex h-10 items-center justify-between border-b px-4 flex-none">
           <div className="flex items-center gap-1">
             <button
@@ -432,7 +468,6 @@ export default function CodePlayground() {
           </div>
         </div>
 
-        {/* 输出内容 */}
         {!outputCollapsed && (
           <div className="flex-1 min-h-0 overflow-auto p-4">
             {activeOutput === "output" && (

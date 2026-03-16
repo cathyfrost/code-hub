@@ -80,12 +80,16 @@ async function WhoToFollow() {
 const getTrendingTopics = unstable_cache(
   async () => {
     const result = await prisma.$queryRaw<{ hashtag: string; count: bigint }[]>`
-            SELECT LOWER(unnest(regexp_matches(content, '#[^\s#]+', 'g'))) AS hashtag, COUNT(*) AS count
-            FROM posts
-            GROUP BY (hashtag)
-            ORDER BY count DESC, hashtag ASC
-            LIMIT 5
-        `;
+    SELECT hashtag, COUNT(*) AS count
+    FROM (
+        SELECT LOWER(unnest(regexp_matches(content, '#[^\s#<>{};()]{2,}', 'g'))) AS hashtag
+        FROM posts
+    ) t
+    WHERE hashtag !~ '^#(include|define|pragma|ifdef|ifndef|endif|import|if$|else$|error|warning|undef|line)'
+    GROUP BY hashtag
+    ORDER BY count DESC, hashtag ASC
+    LIMIT 5
+`;
 
     return result.map((row) => ({
       hashtag: row.hashtag,
@@ -102,7 +106,7 @@ async function TrendingTopics() {
   const TrendingTopics = await getTrendingTopics();
 
   return (
-    <div className="space-y-5 rounded-2xl bg-card p-5 shadow-sm">
+    <div className="space-y-5 rounded-2xl bg-card p-5 shadow-sm max-h-[calc(100vh-24rem)] overflow-y-auto">
       <div className="font-bold">大家都在聊这些</div>
       {TrendingTopics.map(({ hashtag, count }) => {
         const title = hashtag.split("#")[1];
