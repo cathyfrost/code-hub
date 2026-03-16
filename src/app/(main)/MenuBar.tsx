@@ -41,11 +41,11 @@ export default function MenuBar({className}: MenuBarProps){
         <Button
         variant="ghost"
         className="flex items-center justify-start gap-3"
-        title="书签"
+        title="收藏"
         asChild>
             <Link href="/bookmarks">
             <Bookmark />
-            <span className="hidden lg:inline">书签</span>
+            <span className="hidden lg:inline">收藏</span>
             </Link>
         </Button>
         <Button

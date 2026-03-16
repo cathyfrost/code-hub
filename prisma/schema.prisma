@@ -11,19 +11,20 @@ generator client {
 
 // Example data model
 model User {
-  id           String    @id
-  username     String    @unique
+  id           String     @id
+  username     String     @unique
   displayName  String
-  email        String?   @unique
+  email        String?    @unique
   passwordHash String?
-  googleId     String?   @unique
+  googleId     String?    @unique
   avatarUrl    String?
   bio          String?
   session      Session[]
   posts        Post[]
-  following    Follow[] @relation("Following")
-  followers     Follow[] @relation("Followers")
-  likes Like[]
+  following    Follow[]   @relation("Following")
+  followers    Follow[]   @relation("Followers")
+  likes        Like[]
+  bookmarks    Bookmark[]
 
   createAt DateTime @default(now())
 
@@ -41,50 +42,64 @@ model Session {
 
 model Follow {
   followerId  String
-  follower    User    @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  follower    User   @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
   followingId String
-  following   User    @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  following   User   @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@map("follows")
 }
 
 model Post {
-  id       String   @id @default(cuid())
-  content  String
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String     @id @default(cuid())
+  content     String
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   attachments Media[]
-  likes Like[]
+  likes       Like[]
+  bookmarks   Bookmark[]
 
   createAt DateTime @default(now())
 
   @@map("posts")
 }
 
-model Media{
-  id       String   @id @default(cuid())
+model Media {
+  id     String    @id @default(cuid())
   postId String?
-  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull)
-  type MediaType
-  url String
+  post   Post?     @relation(fields: [postId], references: [id], onDelete: SetNull)
+  type   MediaType
+  url    String
 
   createAt DateTime @default(now())
 
   @@map("post_media")
 }
 
-enum MediaType{
+enum MediaType {
   IMAGE
   VIDEO
 }
 
-model Like{
+model Like {
   userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   postId String
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
   @@map("likes")
+}
+
+model Bookmark {
+  id     String    @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@map("bookmarks")
 }

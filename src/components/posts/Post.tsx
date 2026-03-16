@@ -24,6 +24,7 @@ import UserTooltip from "../UserTooltip";
 import { Media } from "@prisma/client";
 import Image from "next/image";
 import LikeButton from "./LikeButton";
+import BookmarkButton from "./BookmarkButton";
 
 interface PostProps {
   post: PostData;
@@ -320,7 +321,7 @@ function ImageLightbox({
         </button>
       </div>
       {/* 图片 */}
-      <img
+      <Image
         src={src}
         alt="预览大图"
         className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
@@ -386,13 +387,25 @@ export default function Post({ post }: PostProps) {
           .map((a) => a.url)}
       />
       <hr className="text-muted-foreground" />
-      <LikeButton
+      <div className="flex justify-between gap-5">
+        <LikeButton
         postId={post.id}
         initialState={{
           likes: post._count.likes,
           isLikedByUser: post.likes.some((like) => like.userId === user.id),
         }}
       />
+      <BookmarkButton 
+      postId={post.id}
+      initialState={{
+        isBookmarkedByUser: post.bookmarks.some(
+        bookmark => bookmark.userId === user.id,
+        )
+      }}
+      />
+      </div>
+      
+      
     </article>
   );
 }

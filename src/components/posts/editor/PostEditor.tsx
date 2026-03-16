@@ -345,7 +345,6 @@ export default function PostEditor() {
           size="icon"
           className="text-primary hover:text-primary"
           onClick={() => setShowCodeDialog(true)}
-          title="插入代码"
         >
           <Code2 size={20} />
         </Button>
