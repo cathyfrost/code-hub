@@ -16,6 +16,7 @@ import {
   ChevronUp,
   X,
   Download,
+  MessageSquare,
 } from "lucide-react";
 import { useSession } from "@/app/(main)/SessionProvider";
 import PostMoreButton from "./PostMoreButton";
@@ -25,6 +26,7 @@ import { Media } from "@prisma/client";
 import Image from "next/image";
 import LikeButton from "./LikeButton";
 import BookmarkButton from "./BookmarkButton";
+import Comments from "../comments/Comments";
 
 interface PostProps {
   post: PostData;
@@ -228,9 +230,7 @@ function renderContent(content: string) {
     if (codeMatch) {
       const language = codeMatch[1] || "text";
       const code = codeMatch[2].trimEnd();
-      return (
-        <CollapsibleCodeBlock key={i} language={language} code={code} />
-      );
+      return <CollapsibleCodeBlock key={i} language={language} code={code} />;
     }
     return part.trim() ? (
       <span key={i} className="whitespace-pre-line break-words">
@@ -241,13 +241,7 @@ function renderContent(content: string) {
 }
 
 // ── 图片灯箱弹窗 ──
-function ImageLightbox({
-  src,
-  onClose,
-}: {
-  src: string;
-  onClose: () => void;
-}) {
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopyImage() {
@@ -321,18 +315,25 @@ function ImageLightbox({
         </button>
       </div>
       {/* 图片 */}
-      <Image
-        src={src}
-        alt="预览大图"
-        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+      <div
+        className="relative h-[90vh] w-[90vw]"
         onClick={(e) => e.stopPropagation()}
-      />
+      >
+        <Image
+          src={src}
+          alt="预览大图"
+          fill
+          className="rounded-lg object-contain"
+        />
+      </div>
     </div>
   );
 }
 
 export default function Post({ post }: PostProps) {
   const { user } = useSession();
+
+  const [showComments, setShowComments] = useState(false);
 
   return (
     <article className="group/post space-y-3 rounded-2xl bg-card p-5 shadow-sm">
@@ -388,24 +389,29 @@ export default function Post({ post }: PostProps) {
       />
       <hr className="text-muted-foreground" />
       <div className="flex justify-between gap-5">
-        <LikeButton
-        postId={post.id}
-        initialState={{
-          likes: post._count.likes,
-          isLikedByUser: post.likes.some((like) => like.userId === user.id),
-        }}
-      />
-      <BookmarkButton 
-      postId={post.id}
-      initialState={{
-        isBookmarkedByUser: post.bookmarks.some(
-        bookmark => bookmark.userId === user.id,
-        )
-      }}
-      />
+        <div className="flex items-center gap-5">
+          <LikeButton
+            postId={post.id}
+            initialState={{
+              likes: post._count.likes,
+              isLikedByUser: post.likes.some((like) => like.userId === user.id),
+            }}
+          />
+          <CommentButton
+            post={post}
+            onClick={() => setShowComments(!showComments)}
+          />
+        </div>
+        <BookmarkButton
+          postId={post.id}
+          initialState={{
+            isBookmarkedByUser: post.bookmarks.some(
+              (bookmark) => bookmark.userId === user.id,
+            ),
+          }}
+        />
       </div>
-      
-      
+      {showComments && <Comments post={post} />}
     </article>
   );
 }
@@ -470,4 +476,63 @@ function MediaPreview({ media }: MediaPreviewProps) {
   }
 
   return <p className="text-destructive">不支持的视频类型</p>;
+}
+
+interface CommentButtonProps {
+  post: PostData;
+  onClick: () => void;
+}
+
+function CommentButton({ post, onClick }: CommentButtonProps) {
+  const [anim, setAnim] = useState<"idle" | "click">("idle");
+
+  function handleClick() {
+    setAnim("click");
+    setTimeout(() => setAnim("idle"), 500);
+    onClick();
+  }
+
+  return (
+    <>
+      <style jsx global>{`
+        @keyframes bubblePop {
+          0%   { transform: scale(1); }
+          20%  { transform: scale(1.35); }
+          40%  { transform: scale(0.85); }
+          60%  { transform: scale(1.15); }
+          80%  { transform: scale(0.95); }
+          100% { transform: scale(1); }
+        }
+        @keyframes numSlide {
+          0%   { transform: translateY(0); }
+          40%  { transform: translateY(-2px); }
+          100% { transform: translateY(0); }
+        }
+      `}</style>
+      <button
+        onClick={handleClick}
+        className="group/comment -ml-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors duration-200 hover:bg-primary/10"
+      >
+        <MessageSquare
+          className="size-[18px] text-muted-foreground transition-all duration-200 group-hover/comment:text-primary group-hover/comment:scale-110"
+          style={
+            anim === "click"
+              ? { animation: "bubblePop 0.5s cubic-bezier(.17,.89,.32,1.28)" }
+              : undefined
+          }
+        />
+        <span
+          className="text-sm font-medium tabular-nums text-muted-foreground transition-colors duration-200 group-hover/comment:text-primary"
+          style={
+            anim === "click"
+              ? { animation: "numSlide 0.35s ease-out" }
+              : undefined
+          }
+        >
+          {post._count.comments}{" "}
+          <span className="hidden sm:inline">评论</span>
+        </span>
+      </button>
+    </>
+  );
 }

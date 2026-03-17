@@ -8,6 +8,7 @@ export function getUserDataSelect(loggedInUserId: string) {
     avatarUrl: true,
     bio: true,
     createAt: true,
+    interests: true,
     followers: {
       where: {
         followerId: loggedInUserId,
@@ -69,19 +70,77 @@ export interface PostsPage {
   nextCursor: string | null;
 }
 
-export function getCommentDataInclude(loggedInUserId: string){
+export function getCommentDataInclude(loggedInUserId: string) {
   return {
     user: {
-      select: getUserDataSelect(loggedInUserId)
-    }
-  }satisfies Prisma.CommentInclude
+      select: getUserDataSelect(loggedInUserId),
+    },
+    likes: {
+      where: {
+        userId: loggedInUserId,
+      },
+      select: {
+        userId: true,
+      },
+    },
+    replies: {
+      include: {
+        user: {
+          select: getUserDataSelect(loggedInUserId),
+        },
+        likes: {
+          where: {
+            userId: loggedInUserId,
+          },
+          select: {
+            userId: true,
+          },
+        },
+        replies: {
+          include: {
+            user: {
+              select: getUserDataSelect(loggedInUserId),
+            },
+            likes: {
+              where: {
+                userId: loggedInUserId,
+              },
+              select: {
+                userId: true,
+              },
+            },
+            _count: {
+              select: {
+                likes: true,
+                replies: true,
+              },
+            },
+          },
+          orderBy: { createAt: "asc" as const },
+        },
+        _count: {
+          select: {
+            likes: true,
+            replies: true,
+          },
+        },
+      },
+      orderBy: { createAt: "asc" as const },
+    },
+    _count: {
+      select: {
+        likes: true,
+        replies: true,
+      },
+    },
+  } satisfies Prisma.CommentInclude;
 }
 
 export type CommentData = Prisma.CommentGetPayload<{
   include: ReturnType<typeof getCommentDataInclude>;
-}>
+}>;
 
-export interface CommentsPage{
+export interface CommentsPage {
   comments: CommentData[];
   previousCursor: string | null;
 }
@@ -92,6 +151,11 @@ export interface FollowerInfo {
 }
 
 export interface LikeInfo {
+  likes: number;
+  isLikedByUser: boolean;
+}
+
+export interface CommentLikeInfo {
   likes: number;
   isLikedByUser: boolean;
 }

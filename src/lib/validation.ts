@@ -28,6 +28,7 @@ export const createPostSchema = z.object({
 export const updateUserProfileSchema = z.object({
     displayName: requiredString,
     bio: z.string().max(1000, "最多1000个字符"),
+    interests: z.array(z.string()).max(10, "最多选择10个标签").optional(),
 });
 
 export type UpdateUserProfileValues = z.infer<typeof updateUserProfileSchema>;

@@ -9,23 +9,26 @@ generator client {
   previewFeatures = ["fullTextSearch"]
 }
 
-// Example data model
 model User {
-  id           String     @id
-  username     String     @unique
-  displayName  String
-  email        String?    @unique
-  passwordHash String?
-  googleId     String?    @unique
-  avatarUrl    String?
-  bio          String?
-  session      Session[]
-  posts        Post[]
-  following    Follow[]   @relation("Following")
-  followers    Follow[]   @relation("Followers")
-  likes        Like[]
-  bookmarks    Bookmark[]
-  comments     Comment[]
+  id              String           @id
+  username        String           @unique
+  displayName     String
+  email           String?          @unique
+  passwordHash    String?
+  googleId        String?          @unique
+  avatarUrl       String?
+  bio             String?
+  skillLevel      Int              @default(1)
+  interests       String[]         @default([])
+  session         Session[]
+  posts           Post[]
+  following       Follow[]         @relation("Following")
+  followers       Follow[]         @relation("Followers")
+  likes           Like[]
+  bookmarks       Bookmark[]
+  comments        Comment[]
+  commentLikes    CommentLike[]
+  aiConversations AiConversation[]
 
   createAt DateTime @default(now())
 
@@ -60,6 +63,9 @@ model Post {
   likes       Like[]
   bookmarks   Bookmark[]
   comments    Comment[]
+  tags        String[]   @default([])
+  difficulty  Int        @default(1)
+  codeBlocks  Int        @default(0)
 
   createAt DateTime @default(now())
 
@@ -84,16 +90,30 @@ enum MediaType {
 }
 
 model Comment {
-  id      String @id @default(cuid())
-  content String
-  userId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId String
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  id       String        @id @default(cuid())
+  content  String
+  userId   String
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId   String
+  post     Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId String?
+  parent   Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[]     @relation("CommentReplies")
+  likes    CommentLike[]
 
   createAt DateTime @default(now())
 
   @@map("comments")
+}
+
+model CommentLike {
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@map("comment_likes")
 }
 
 model Like {
@@ -117,4 +137,29 @@ model Bookmark {
 
   @@unique([userId, postId])
   @@map("bookmarks")
+}
+
+model AiConversation {
+  id       String      @id @default(cuid())
+  title    String      @default("新对话")
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+
+  createAt DateTime @default(now())
+
+  @@map("ai_messages")
 }

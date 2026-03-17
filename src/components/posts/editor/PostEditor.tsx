@@ -32,6 +32,32 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
+// ── HTML 转义 / 反转义工具函数 ──
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function unescapeHtml(str: string): string {
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+// ── 将带换行的文本构造为 TipTap JSON 节点 ──
+function textToTiptapNodes(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line) => ({
+    type: "paragraph" as const,
+    content: line ? [{ type: "text" as const, text: line }] : [],
+  }));
+}
+
 // ── 支持的语言列表 ──
 const LANGUAGES = [
   "javascript",
@@ -264,6 +290,7 @@ export default function PostEditor() {
     ],
   });
 
+  // ── URL sharedCode 处理（同样需要转义） ──
   useEffect(() => {
     if (!editor) return;
     const params = new URLSearchParams(window.location.search);
@@ -271,30 +298,34 @@ export default function PostEditor() {
     const sharedLang = params.get("lang");
     if (sharedCode) {
       const decoded = decodeURIComponent(sharedCode);
-      const codeBlock = "```" + (sharedLang || "text") + "\n" + decoded + "\n```";
-      const lines = codeBlock.split("\n");
-      const content = lines.map((line) => ({
-        type: "paragraph" as const,
-        content: line ? [{ type: "text" as const, text: line }] : [],
-      }));
+      // 转义代码内容中的 HTML 字符
+      const escapedCode = escapeHtml(decoded);
+      const codeBlock =
+        "```" + (sharedLang || "text") + "\n" + escapedCode + "\n```";
+      const content = textToTiptapNodes(codeBlock);
       editor.commands.setContent({ type: "doc", content });
       editor.commands.focus("end");
       window.history.replaceState({}, "", "/");
     }
   }, [editor]);
 
+  // ── 获取编辑器纯文本 ──
   const input =
     editor?.getText({
       blockSeparator: "\n",
     }) || "";
 
+  // ── 插入代码：对 HTML 字符转义后再插入 ──
   function handleInsertCode(code: string, language: string) {
     if (!editor) return;
-    const codeBlock = "\n```" + language + "\n" + code + "\n```";
-    editor.commands.insertContent(codeBlock);
+    const escapedCode = escapeHtml(code);
+    const codeBlock = "\n```" + language + "\n" + escapedCode + "\n```";
+    const content = textToTiptapNodes(codeBlock);
+    editor.commands.insertContent(content);
     editor.commands.focus("end");
   }
 
+  // ── 提交：反转义恢复原始代码内容 ──
   function onSubmit() {
     setFlyOut(true);
 
@@ -307,9 +338,12 @@ export default function PostEditor() {
       setShowNew(false);
     }, 800);
 
+    // 反转义，恢复原始 HTML/JSX 标签
+    const rawContent = unescapeHtml(input);
+
     mutation.mutate(
       {
-        content: input,
+        content: rawContent,
         mediaIds: attachments
           .map((a) => a.mediaId)
           .filter(Boolean) as string[],

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Bell, Bookmark, Home, Mail, Code, PenTool, Bot, BarChart3 } from "lucide-react"
+import { Bell, Bookmark, Home, Mail, Code, ClipboardList, Bot, BarChart3 } from "lucide-react"
 import Link from "next/link"
 
 interface MenuBarProps{
@@ -61,11 +61,11 @@ export default function MenuBar({className}: MenuBarProps){
         <Button
         variant="ghost"
         className="flex items-center justify-start gap-3"
-        title="画板"
+        title="题库"
         asChild>
-            <Link href="/canvas">
-            <PenTool />
-            <span className="hidden lg:inline">画板</span>
+            <Link href="/quiz">
+            <ClipboardList />
+            <span className="hidden lg:inline">题库</span>
             </Link>
         </Button>
         <Button
