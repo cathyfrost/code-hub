@@ -29,6 +29,7 @@ model User {
   comments        Comment[]
   commentLikes    CommentLike[]
   aiConversations AiConversation[]
+  quizSubmissions QuizSubmission[]
 
   createAt DateTime @default(now())
 
@@ -162,4 +163,40 @@ model AiMessage {
   createAt DateTime @default(now())
 
   @@map("ai_messages")
+}
+
+model Quiz {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  difficulty  String   @default("easy")
+  tags        String[] @default([])
+  examples    Json     @default("[]")
+  testCases   Json     @default("[]")
+  starterCode Json     @default("{}")
+  hints       String?
+  order       Int      @default(0)
+
+  submissions QuizSubmission[]
+
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  @@map("quizzes")
+}
+
+model QuizSubmission {
+  id       String  @id @default(cuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId   String
+  quiz     Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  code     String
+  language String
+  passed   Boolean @default(false)
+  results  Json    @default("[]")
+
+  createAt DateTime @default(now())
+
+  @@map("quiz_submissions")
 }
