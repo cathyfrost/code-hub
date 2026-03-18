@@ -22,7 +22,7 @@ import {
   Split,
   X,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import MarkdownPreview from "./MarkdownPreview";
 
 interface NotebookEditorProps {
