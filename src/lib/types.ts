@@ -9,6 +9,7 @@ export function getUserDataSelect(loggedInUserId: string) {
     bio: true,
     createAt: true,
     interests: true,
+    skillLevel: true, // 加这一行
     followers: {
       where: {
         followerId: loggedInUserId,

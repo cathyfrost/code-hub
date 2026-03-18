@@ -14,6 +14,14 @@ interface UserTooltipProps extends PropsWithChildren{
     user: UserData;
 }
 
+const LEVEL_CONFIG: Record<number, { label: string; color: string }> = {
+  1: { label: "Lv1 入门", color: "text-zinc-500" },
+  2: { label: "Lv2 进阶", color: "text-blue-500" },
+  3: { label: "Lv3 熟练", color: "text-emerald-500" },
+  4: { label: "Lv4 精通", color: "text-amber-500" },
+  5: { label: "Lv5 专家", color: "text-red-500" },
+};
+
 export default function UserTooltip({children, user}: UserTooltipProps){
     const {user: loggedInUser} = useSession();
 
@@ -23,6 +31,9 @@ export default function UserTooltip({children, user}: UserTooltipProps){
             ({followerId}) => followerId === loggedInUser.id
         )
     }
+
+    const level = user.skillLevel || 1;
+    const levelInfo = LEVEL_CONFIG[level] || LEVEL_CONFIG[1];
 
     return <TooltipProvider>
         <Tooltip>
@@ -44,6 +55,9 @@ export default function UserTooltip({children, user}: UserTooltipProps){
                         </div>
                         <div className="text-muted-foreground">@{user.username}</div>
                         </Link>
+                        <span className={`mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium ${levelInfo.color}`}>
+                            {levelInfo.label}
+                        </span>
                     </div>
                     {user.bio && (
                         <Linkify>

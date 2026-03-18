@@ -14,6 +14,7 @@ export async function GET(
       return Response.json({ error: "未授权" }, { status: 401 });
     }
 
+
     const post = await prisma.post.findUnique({
       where: { id: postId },
       select: {
@@ -60,6 +61,17 @@ export async function POST(
       return Response.json({ error: "未授权" }, { status: 401 });
     }
 
+    const post = await prisma.post.findUnique({
+      where: {id: postId},
+      select: {
+        userId: true
+      }
+    })
+
+    if(!post) {
+      return Response.json({ error: "帖子不存在" }, { status: 404 });
+    }
+
     await prisma.like.upsert({
       where: {
         userId_postId: {
@@ -73,6 +85,15 @@ export async function POST(
       },
       update: {},
     });
+
+    await prisma.notification.create({
+      data: {
+        issuserId: loggedInUser.id,
+        recipientId: post.userId,
+        postId,
+        type: "LIKE"
+      }
+    })
     return new Response();
   } catch (error) {
     console.error(error);

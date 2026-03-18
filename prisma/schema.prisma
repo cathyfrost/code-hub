@@ -30,6 +30,8 @@ model User {
   commentLikes    CommentLike[]
   aiConversations AiConversation[]
   quizSubmissions QuizSubmission[]
+  receivedNotifications Notification[] @relation("Recipient")
+  issuedNotifications Notification[] @relation("Issuer")
 
   createAt DateTime @default(now())
 
@@ -67,6 +69,7 @@ model Post {
   tags        String[]   @default([])
   difficulty  Int        @default(1)
   codeBlocks  Int        @default(0)
+  linkedNotifications Notification[]
 
   createAt DateTime @default(now())
 
@@ -199,4 +202,26 @@ model QuizSubmission {
   createAt DateTime @default(now())
 
   @@map("quiz_submissions")
+}
+
+model Notification{
+  id String @id @default(cuid())
+  recipientId String
+  recipient   User   @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  issuserId String
+  issuer   User   @relation("Issuer", fields: [issuserId], references: [id], onDelete: Cascade)
+  postId String?
+  post  Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type NotificationType
+  read Boolean @default(false)
+
+  createAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+enum NotificationType{
+  LIKE
+  FOLLOW
+  COMMENT
 }

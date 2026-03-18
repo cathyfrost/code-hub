@@ -24,6 +24,7 @@ import {
   FileEdit,
   PenTool,
   X,
+  Terminal,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
@@ -36,10 +37,8 @@ import dynamic from "next/dynamic";
 const ExcalidrawCanvas = dynamic(
   () =>
     import("@excalidraw/excalidraw").then((mod) => {
-      // 同时加载样式
       import("@excalidraw/excalidraw/index.css");
       const { Excalidraw } = mod;
-      // 包装成命名组件
       function ExcalidrawWrapper(props: {
         theme: "light" | "dark";
         onAPI: (api: unknown) => void;
@@ -143,9 +142,7 @@ export default function CodePlayground() {
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [outputCollapsed, setOutputCollapsed] = useState(false);
-  const [activeOutput, setActiveOutput] = useState<
-    "output" | "ai" | "preview"
-  >("output");
+  const [activeOutput, setActiveOutput] = useState<"output" | "ai" | "preview">("output");
   const [hasError, setHasError] = useState(false);
   const [execInfo, setExecInfo] = useState<{
     time?: string;
@@ -153,6 +150,10 @@ export default function CodePlayground() {
   } | null>(null);
   const [outputHeight, setOutputHeight] = useState(208);
   const editorRef = useRef<EditorInstance | null>(null);
+
+  // stdin 状态
+  const [stdin, setStdin] = useState("");
+  const [showStdin, setShowStdin] = useState(true);
 
   // 输出面板拖拽
   const isDraggingOutput = useRef(false);
@@ -239,7 +240,6 @@ export default function CodePlayground() {
 
   /* ------ Monaco 自适应 ------ */
   useEffect(() => {
-    // 画板开关时触发 Monaco 重新布局
     const timer = setTimeout(() => {
       editorRef.current?.layout();
     }, 50);
@@ -298,7 +298,7 @@ export default function CodePlayground() {
       const res = await fetch("/api/run-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code, language, stdin }),
       });
 
       if (!res.ok) {
@@ -321,7 +321,8 @@ export default function CodePlayground() {
     }
 
     setIsRunning(false);
-  }, [code, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, language, stdin]);
 
   const handleReset = () => {
     setCode(DEFAULT_CODE[language] || "");
@@ -329,6 +330,7 @@ export default function CodePlayground() {
     setAiResult("");
     setHasError(false);
     setExecInfo(null);
+    setStdin("");
   };
 
   const handleCopy = async () => {
@@ -359,7 +361,12 @@ export default function CodePlayground() {
       const res = await fetch("/api/ai-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language, action }),
+        body: JSON.stringify({
+          code,
+          language,
+          action,
+          errorOutput: action === "debug" && hasError ? output : undefined,
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -382,11 +389,11 @@ export default function CodePlayground() {
   return (
     <div className="flex h-[calc(100vh-6rem)] gap-0">
       {/* ====== 左侧：代码编辑器 + 输出 ====== */}
-      <div className="flex flex-1 min-w-0 flex-col gap-0">
+      <div className="flex min-w-0 flex-1 flex-col gap-0">
         {/* 编辑器 */}
-        <div className="flex-1 min-h-0 rounded-xl border bg-card overflow-hidden flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
           {/* 顶部工具栏 */}
-          <div className="flex h-10 items-center justify-between border-b px-3">
+          <div className="flex h-10 flex-none items-center justify-between border-b px-3">
             <div className="flex items-center gap-2">
               <select
                 value={language}
@@ -436,6 +443,17 @@ export default function CodePlayground() {
                 <PenTool className="h-3.5 w-3.5" />
               </Button>
 
+              {/* stdin 按钮 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-7 w-7 ${showStdin ? "bg-accent" : ""}`}
+                onClick={() => setShowStdin(!showStdin)}
+                title="标准输入 (stdin)"
+              >
+                <Terminal className="h-3.5 w-3.5" />
+              </Button>
+
               {/* AI 助手 */}
               <div className="relative">
                 <Button
@@ -448,13 +466,13 @@ export default function CodePlayground() {
                   <Bot className="h-3.5 w-3.5" />
                 </Button>
                 {showAI && (
-                  <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-xl border bg-popover p-1.5 shadow-md animate-in fade-in-0 zoom-in-95">
+                  <div className="absolute right-0 top-full z-50 mt-1 w-36 animate-in fade-in-0 zoom-in-95 rounded-xl border bg-popover p-1.5 shadow-md">
                     {AI_ACTIONS.map((action) => (
                       <button
                         key={action.value}
                         onClick={() => handleAIAction(action.value)}
                         disabled={aiLoading}
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors hover:bg-accent disabled:opacity-50"
                       >
                         <action.icon className="h-3.5 w-3.5" />
                         {action.label}
@@ -476,21 +494,21 @@ export default function CodePlayground() {
                   <Share2 className="h-3.5 w-3.5" />
                 </Button>
                 {showShare && (
-                  <div className="absolute right-0 top-full mt-1 z-50 w-36 rounded-xl border bg-popover p-1.5 shadow-md animate-in fade-in-0 zoom-in-95">
+                  <div className="absolute right-0 top-full z-50 mt-1 w-36 animate-in fade-in-0 zoom-in-95 rounded-xl border bg-popover p-1.5 shadow-md">
                     <button
                       onClick={() => {
                         setShowShare(false);
                         const encoded = encodeURIComponent(code);
                         router.push(`/?code=${encoded}&lang=${language}`);
                       }}
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs hover:bg-accent transition-colors"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
                     >
                       <FileEdit className="h-3.5 w-3.5" />
                       分享到帖子
                     </button>
                     <button
                       disabled
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground cursor-not-allowed"
+                      className="flex w-full cursor-not-allowed items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                       分享到聊天室
@@ -518,8 +536,38 @@ export default function CodePlayground() {
             </div>
           </div>
 
+          {/* stdin 输入区 */}
+          {showStdin && (
+            <div className="flex-none border-b px-3 py-2">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Terminal className="h-3 w-3" />
+                  标准输入 (stdin)
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={() => {
+                    setShowStdin(false);
+                    setStdin("");
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <textarea
+                value={stdin}
+                onChange={(e) => setStdin(e.target.value)}
+                placeholder="程序运行时的输入内容，每行一个..."
+                className="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-xs outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+                rows={3}
+              />
+            </div>
+          )}
+
           {/* Monaco */}
-          <div className="flex-1 min-h-0">
+          <div className="min-h-0 flex-1">
             <Editor
               height="100%"
               language={currentLang?.monacoId || language}
@@ -551,19 +599,19 @@ export default function CodePlayground() {
 
         {/* 输出面板 */}
         <div
-          className="rounded-xl border bg-card overflow-hidden flex-none flex flex-col"
+          className="flex flex-none flex-col overflow-hidden rounded-xl border bg-card"
           style={{ height: outputCollapsed ? 40 : outputHeight }}
         >
           {!outputCollapsed && (
             <div
               onMouseDown={handleOutputDragStart}
-              className="h-2 cursor-row-resize hover:bg-primary/20 active:bg-primary/30 transition-colors flex items-center justify-center flex-none"
+              className="flex h-2 flex-none cursor-row-resize items-center justify-center transition-colors hover:bg-primary/20 active:bg-primary/30"
             >
-              <div className="w-8 h-0.5 rounded-full bg-border" />
+              <div className="h-0.5 w-8 rounded-full bg-border" />
             </div>
           )}
 
-          <div className="flex h-10 items-center justify-between border-b px-4 flex-none">
+          <div className="flex h-10 flex-none items-center justify-between border-b px-4">
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setActiveOutput("output")}
@@ -649,12 +697,12 @@ export default function CodePlayground() {
           </div>
 
           {!outputCollapsed && (
-            <div className="flex-1 min-h-0 overflow-auto p-4">
+            <div className="min-h-0 flex-1 overflow-auto p-4">
               {activeOutput === "output" && (
                 <>
                   {output ? (
                     <pre
-                      className={`font-mono text-sm whitespace-pre-wrap ${hasError ? "text-destructive" : "text-foreground"}`}
+                      className={`whitespace-pre-wrap font-mono text-sm ${hasError ? "text-destructive" : "text-foreground"}`}
                     >
                       {output === "[HTML_PREVIEW]"
                         ? "HTML 内容请查看「预览」标签。"
@@ -687,7 +735,7 @@ export default function CodePlayground() {
                       <span className="text-sm">AI 正在分析...</span>
                     </div>
                   ) : aiResult ? (
-                    <pre className="font-mono text-sm text-foreground whitespace-pre-wrap">
+                    <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">
                       {aiResult}
                     </pre>
                   ) : (
@@ -705,22 +753,19 @@ export default function CodePlayground() {
       {/* ====== 右侧：画板面板 ====== */}
       {canvasOpen && (
         <>
-          {/* 拖拽手柄 */}
           <div
             onMouseDown={handleCanvasDragStart}
-            className="w-2 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors flex items-center justify-center flex-none"
+            className="flex w-2 flex-none cursor-col-resize items-center justify-center transition-colors hover:bg-primary/20 active:bg-primary/30"
           >
             <div className="h-8 w-0.5 rounded-full bg-border" />
           </div>
 
-          {/* 画板容器 */}
           <div
-            className="flex-none rounded-xl border bg-card overflow-hidden flex flex-col"
+            className="flex flex-none flex-col overflow-hidden rounded-xl border bg-card"
             style={{ width: canvasWidth }}
           >
-            {/* 画板标题栏 */}
-            <div className="flex h-10 items-center justify-between border-b px-3 flex-none">
-              <span className="text-xs font-medium flex items-center gap-1.5">
+            <div className="flex h-10 flex-none items-center justify-between border-b px-3">
+              <span className="flex items-center gap-1.5 text-xs font-medium">
                 <PenTool className="h-3.5 w-3.5" />
                 画板
               </span>
@@ -734,8 +779,7 @@ export default function CodePlayground() {
               </Button>
             </div>
 
-            {/* Excalidraw */}
-            <div className="flex-1 min-h-0">
+            <div className="min-h-0 flex-1">
               <ExcalidrawCanvas
                 theme={appTheme === "dark" ? "dark" : "light"}
                 onAPI={() => {}}

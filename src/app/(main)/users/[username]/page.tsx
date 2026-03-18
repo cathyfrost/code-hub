@@ -31,6 +31,17 @@ const getUser = cache(async (username: string, loggedInUserId: string) => {
 
   if (!user) notFound();
 
+  // 自动更新该用户的技能等级
+  const { calculateUserSkillLevel } = await import("@/lib/recommendation");
+  const freshLevel = await calculateUserSkillLevel(user.id);
+  if (freshLevel !== user.skillLevel) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { skillLevel: freshLevel },
+    });
+    user.skillLevel = freshLevel;
+  }
+
   return user;
 });
 
@@ -119,10 +130,54 @@ async function UserProfile({ user, loggedInUserId }: UserProfileProps) {
         <div className="flex flex-wrap gap-3 sm:flex-nowrap">
           <div className="me-auto space-y-4">
             {/* 名字和用户名 */}
+            {/* 名字和用户名 */}
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                {user.displayName}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">
+                  {user.displayName}
+                </h1>
+                {(() => {
+                  const level = user.skillLevel || 1;
+                  const config: Record<
+                    number,
+                    { label: string; color: string; bg: string }
+                  > = {
+                    1: {
+                      label: "Lv1 入门",
+                      color: "text-zinc-600 dark:text-zinc-400",
+                      bg: "bg-zinc-100 dark:bg-zinc-800",
+                    },
+                    2: {
+                      label: "Lv2 进阶",
+                      color: "text-blue-600 dark:text-blue-400",
+                      bg: "bg-blue-50 dark:bg-blue-950",
+                    },
+                    3: {
+                      label: "Lv3 熟练",
+                      color: "text-emerald-600 dark:text-emerald-400",
+                      bg: "bg-emerald-50 dark:bg-emerald-950",
+                    },
+                    4: {
+                      label: "Lv4 精通",
+                      color: "text-amber-600 dark:text-amber-400",
+                      bg: "bg-amber-50 dark:bg-amber-950",
+                    },
+                    5: {
+                      label: "Lv5 专家",
+                      color: "text-red-600 dark:text-red-400",
+                      bg: "bg-red-50 dark:bg-red-950",
+                    },
+                  };
+                  const info = config[level] || config[1];
+                  return (
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${info.color} ${info.bg}`}
+                    >
+                      {info.label}
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="mt-0.5 text-muted-foreground">
                 @{user.username}
               </div>
