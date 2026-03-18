@@ -12,16 +12,16 @@ import {
 
 interface NoteActionMenuProps {
   notebook: NotebookData;
-  onPin: () => void;
-  onExport: () => void;
-  onDelete: () => void;
+  onPinAction: () => void;
+  onExportAction: () => void;
+  onDeleteAction: () => void;
 }
 
 export default function NoteActionMenu({
   notebook,
-  onPin,
-  onExport,
-  onDelete,
+  onPinAction,
+  onExportAction,
+  onDeleteAction,
 }: NoteActionMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -57,7 +57,7 @@ export default function NoteActionMenu({
           <button
             className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent"
             onClick={() => {
-              onPin();
+              onPinAction();
               setOpen(false);
             }}
           >
@@ -76,7 +76,7 @@ export default function NoteActionMenu({
           <button
             className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent"
             onClick={() => {
-              onExport();
+              onExportAction();
               setOpen(false);
             }}
           >
@@ -86,7 +86,7 @@ export default function NoteActionMenu({
           <button
             className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-accent"
             onClick={() => {
-              onDelete();
+              onDeleteAction();
               setOpen(false);
             }}
           >

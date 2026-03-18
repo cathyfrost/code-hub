@@ -17,24 +17,16 @@ import {
   Hash,
   Inbox,
   Loader2,
-  MoreHorizontal,
   NotebookPen,
-  Pencil,
   Pin,
   Plus,
   Search,
-  Trash2,
+
   X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +38,7 @@ import {
 import LoadingButton from "@/components/LoadingButton";
 import { cn } from "@/lib/utils";
 import NoteActionMenu from "./NoteActionMenu";
-
+import FolderActionMenu from "./FolderActionMenu";
 
 interface NotebookListProps {
   onNewNoteAction: (folderId: string | null) => void;
@@ -149,8 +141,7 @@ export default function NotebookList({
   });
 
   const deleteFolderMutation = useMutation({
-    mutationFn: (id: string) =>
-      ky.delete(`/api/notebook-folders/${id}`).json(),
+    mutationFn: (id: string) => ky.delete(`/api/notebook-folders/${id}`).json(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notebook-folders"] });
       queryClient.invalidateQueries({ queryKey: ["notebooks"] });
@@ -189,8 +180,7 @@ export default function NotebookList({
     toast({ description: "导出成功" });
   }
 
-  const activeFilterClass =
-    "bg-primary text-primary-foreground border-primary";
+  const activeFilterClass = "bg-primary text-primary-foreground border-primary";
   const inactiveFilterClass =
     "bg-card text-muted-foreground border-border hover:border-primary/30 hover:text-foreground";
 
@@ -221,7 +211,7 @@ export default function NotebookList({
       </div>
 
       {/* 文件夹筛选 */}
-      <div className="flex flex-none items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <div className="scrollbar-none flex flex-none items-center gap-1.5 overflow-x-auto pb-1">
         <button
           onClick={() => {
             setSelectedFolderId(null);
@@ -293,31 +283,13 @@ export default function NotebookList({
             )}
 
             {editingFolderId !== folder.id && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-accent text-muted-foreground group-hover:flex">
-                    <MoreHorizontal className="h-2.5 w-2.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-28">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingFolderId(folder.id);
-                      setEditingName(folder.name);
-                    }}
-                  >
-                    <Pencil className="mr-2 h-3.5 w-3.5" />
-                    重命名
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => deleteFolderMutation.mutate(folder.id)}
-                  >
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <FolderActionMenu
+                onRenameAction={() => {
+                  setEditingFolderId(folder.id);
+                  setEditingName(folder.name);
+                }}
+                onDeleteAction={() => deleteFolderMutation.mutate(folder.id)}
+              />
             )}
           </div>
         ))}
@@ -359,9 +331,7 @@ export default function NotebookList({
               <button
                 key={tag.name}
                 onClick={() => {
-                  setSelectedTag(
-                    selectedTag === tag.name ? null : tag.name,
-                  );
+                  setSelectedTag(selectedTag === tag.name ? null : tag.name);
                   setSelectedFolderId(null);
                 }}
                 className={`flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
@@ -393,9 +363,7 @@ export default function NotebookList({
                 ? "没有匹配的笔记"
                 : "还没有笔记，开始记录吧"}
             </p>
-            <NewNoteButton
-              onClick={() => onNewNoteAction(selectedFolderId)}
-            />
+            <NewNoteButton onClick={() => onNewNoteAction(selectedFolderId)} />
           </div>
         ) : (
           <>
@@ -439,11 +407,11 @@ export default function NotebookList({
                   </div>
 
                   {/* 标签 */}
-                  <div className="hidden min-w-0 md:flex flex-wrap gap-1">
+                  <div className="hidden min-w-0 flex-wrap gap-1 md:flex">
                     {notebook.tags.slice(0, 2).map((tag) => (
                       <span
                         key={tag}
-                        className="truncate rounded px-1.5 py-0.5 text-[10px] bg-accent/60 text-muted-foreground"
+                        className="truncate rounded bg-accent/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
                       >
                         #{tag}
                       </span>
@@ -472,14 +440,14 @@ export default function NotebookList({
                     </span>
                     <NoteActionMenu
                       notebook={notebook}
-                      onPin={() =>
+                      onPinAction={() =>
                         pinMutation.mutate({
                           id: notebook.id,
                           pinned: !notebook.pinned,
                         })
                       }
-                      onExport={() => handleExport(notebook)}
-                      onDelete={() => {
+                      onExportAction={() => handleExport(notebook)}
+                      onDeleteAction={() => {
                         setDeleteTargetId(notebook.id);
                         setShowDeleteDialog(true);
                       }}
