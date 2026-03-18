@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 
-
+@import "~stream-chat-react/dist/css/v2/index.css";
 
 @layer base {
   :root {
@@ -71,4 +71,177 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ── Stream Chat 样式 ── */
+
+.str-chat {
+  --str-chat__font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  --str-chat__primary-color: theme(colors.primary.DEFAULT);
+  --str-chat__on-primary-color: theme(colors.primary.foreground);
+  --str-chat__active-primary-color: theme(colors.primary.foreground);
+  --str-chat__primary-color-low-emphasis: color-mix(
+    in hsl,
+    hsl(var(--primary)) 10%,
+    transparent
+  );
+  --str-chat__background-color: theme(colors.card.DEFAULT);
+  --str-chat__secondary-background-color: theme(colors.card.DEFAULT);
+  --str-chat__message-textarea-background-color: theme(colors.background);
+  --str-chat__channel-preview-active-background-color: hsl(var(--accent));
+  --str-chat__channel-preview-hover-background-color: var(
+    --str-chat__channel-preview-active-background-color
+  );
+  --str-chat__secondary-surface-color: theme(colors.muted.DEFAULT);
+  --str-chat__own-message-bubble-color: theme(colors.primary.foreground);
+  --str-chat__primary-surface-color: theme(colors.primary.DEFAULT);
+  --str-chat__primary-surface-color-low-emphasis: var(
+    --str-chat__primary-color-low-emphasis
+  );
+  --str-chat__disabled-color: theme(colors.muted.DEFAULT);
+  --str-chat__cta-button-border-radius: var(--radius);
+}
+
+.str-chat-channel-list {
+  border-right: none;
+}
+
+.str-chat__channel-list-react .str-chat__channel-list-messenger-react {
+  padding-bottom: 0;
+}
+
+.str-chat__channel-search-bar-button--exit-search {
+  display: none;
+}
+
+/* ── 悬停特效 & 字体优化 ── */
+
+/* 消息文字 */
+.str-chat__message-text p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.str-chat__channel-preview-messenger {
+  font-size: 14px;
+  transition: background 0.15s ease;
+}
+
+.str-chat__file-input-container {
+  display: none !important;
+}
+
+.str-chat__message-input .str-chat__message-textarea-container {
+  margin-left: 32px !important;
+}
+
+.str-chat__message-actions-list-item-button[aria-roledescription="flag"],
+.str-chat__message-actions-list-item-button[aria-roledescription="mute"] {
+  display: none !important;
+}
+
+
+/* 气泡悬停 — 微微浮起 + 淡阴影 */
+.str-chat__message-bubble {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.str-chat__message-bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 操作按钮淡入 */
+.str-chat__message-options {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.str-chat__message:hover .str-chat__message-options {
+  opacity: 1;
+}
+
+/* 频道列表项悬停 */
+.str-chat__channel-preview-messenger {
+  transition: background 0.15s ease;
+}
+
+/* 头像悬停 */
+.str-chat__avatar {
+  transition: transform 0.2s ease;
+}
+
+.str-chat__avatar:hover {
+  transform: scale(1.06);
+}
+
+/* 发送按钮弹性 */
+.str-chat__send-button {
+  transition: transform 0.15s ease;
+}
+
+.str-chat__send-button:hover {
+  transform: scale(1.1);
+}
+
+.str-chat__send-button:active {
+  transform: scale(0.93);
+}
+
+/* 表情回应悬停放大 */
+.str-chat__message-reactions-option {
+  transition: transform 0.15s ease;
+}
+
+.str-chat__message-reactions-option:hover {
+  transform: scale(1.25);
+}
+
+/* 输入框聚焦发光 */
+.str-chat__message-textarea-container {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.str-chat__message-textarea-container:focus-within {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--primary)) 12%, transparent);
+}
+
+/* 新消息入场动画 */
+@keyframes msgFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.str-chat__li {
+  animation: msgFadeIn 0.2s ease-out;
+}
+
+/* 滚动条细化 */
+.str-chat__list {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.str-chat__list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.str-chat__list::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+/* 暗色模式气泡悬停阴影加深 */
+.dark .str-chat__message-bubble:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
