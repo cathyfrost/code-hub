@@ -1,92 +1,438 @@
 // ============================================
-// 推荐算法实验分析脚本
+// 推荐算法对比实验分析脚本
 // scripts/analyze-recommendation.ts
 //
 // 用法：npx tsx scripts/analyze-recommendation.ts
-// 功能：运行推荐算法，对比各基线算法，输出可用于论文的实验数据
+// 功能：运行四种算法对比实验，输出论文用的表格数据和图表数据
 // ============================================
 
 import { PrismaClient } from "@prisma/client";
-import {
-  getRecommendations,
-  getTimeBasedRecommendations,
-  getPureCFRecommendations,
-  getPureContentRecommendations,
-} from "@/lib/recommendation";
 
 const prisma = new PrismaClient();
 
-// ==================== 评估指标 ====================
+// ==================== 权重配置（与主算法一致）====================
+const WEIGHTS = {
+  alpha: 0.3,
+  beta: 0.25,
+  gamma: 0.25,
+  delta: 0.2,
+};
+
+// ==================== 类型定义 ====================
+interface UserProfile {
+  id: string;
+  skillLevel: number;
+  interests: string[];
+  likedPostIds: Set<string>;
+  bookmarkedPostIds: Set<string>;
+}
+
+interface PostData {
+  id: string;
+  userId: string;
+  tags: string[];
+  difficulty: number;
+  codeBlocks: number;
+  createAt: Date;
+  likeCount: number;
+  bookmarkCount: number;
+  commentCount: number;
+}
+
+// ==================== 四种推荐算法 ====================
 
 /**
- * 准确率 (Precision@K)
- * 推荐列表中，与用户兴趣匹配的帖子占比
+ * 算法1：纯时间排序（基线）
+ * 最简单的排序方式，按发布时间倒序
  */
+function timeBasedRecommend(
+  userId: string,
+  allPosts: PostData[],
+  limit: number
+): string[] {
+  return allPosts
+    .filter((p) => p.userId !== userId)
+    .sort((a, b) => b.createAt.getTime() - a.createAt.getTime())
+    .slice(0, limit)
+    .map((p) => p.id);
+}
+
+/**
+ * 算法2：纯协同过滤（基线）
+ * 只看"相似用户喜欢什么"
+ */
+function pureCFRecommend(
+  currentUser: UserProfile,
+  allUsers: UserProfile[],
+  allPosts: PostData[],
+  limit: number
+): string[] {
+  const similarities: Array<{ userId: string; similarity: number }> = [];
+
+  for (const other of allUsers) {
+    if (other.id === currentUser.id) continue;
+    const intersection = [...currentUser.likedPostIds].filter((id) =>
+      other.likedPostIds.has(id)
+    ).length;
+    const union = new Set([
+      ...currentUser.likedPostIds,
+      ...other.likedPostIds,
+    ]).size;
+    const sim = union > 0 ? intersection / union : 0;
+    if (sim > 0) similarities.push({ userId: other.id, similarity: sim });
+  }
+
+  const topNeighbors = similarities
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 20);
+
+  const scores = new Map<string, number>();
+  const candidates = allPosts.filter(
+    (p) =>
+      p.userId !== currentUser.id &&
+      !currentUser.likedPostIds.has(p.id) &&
+      !currentUser.bookmarkedPostIds.has(p.id)
+  );
+
+  for (const post of candidates) {
+    let score = 0;
+    for (const neighbor of topNeighbors) {
+      const neighborUser = allUsers.find((u) => u.id === neighbor.userId);
+      if (neighborUser?.likedPostIds.has(post.id)) {
+        score += neighbor.similarity;
+      }
+    }
+    scores.set(post.id, score);
+  }
+
+  return candidates
+    .sort((a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0))
+    .slice(0, limit)
+    .map((p) => p.id);
+}
+
+/**
+ * 算法3：纯内容推荐（基线）
+ * 只看"帖子内容和用户兴趣匹不匹配"
+ */
+function pureContentRecommend(
+  currentUser: UserProfile,
+  allPosts: PostData[],
+  limit: number
+): string[] {
+  const tagCounts = new Map<string, number>();
+  for (const post of allPosts) {
+    for (const tag of post.tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const totalPosts = allPosts.length;
+  const tagIDF = new Map<string, number>();
+  for (const [tag, count] of tagCounts) {
+    tagIDF.set(tag, Math.log((totalPosts + 1) / (count + 1)) + 1);
+  }
+
+  let userNormSq = 0;
+  for (const tag of currentUser.interests) {
+    const idf = tagIDF.get(tag) || 1;
+    userNormSq += idf * idf;
+  }
+  const userNorm = Math.sqrt(userNormSq);
+
+  const scores = new Map<string, number>();
+  const candidates = allPosts.filter((p) => p.userId !== currentUser.id);
+
+  for (const post of candidates) {
+    if (post.tags.length === 0 || currentUser.interests.length === 0) {
+      scores.set(post.id, 0);
+      continue;
+    }
+
+    let dotProduct = 0;
+    for (const tag of post.tags) {
+      if (currentUser.interests.includes(tag)) {
+        const idf = tagIDF.get(tag) || 1;
+        dotProduct += idf * idf;
+      }
+    }
+
+    let postNormSq = 0;
+    for (const tag of post.tags) {
+      const idf = tagIDF.get(tag) || 1;
+      postNormSq += idf * idf;
+    }
+    const postNorm = Math.sqrt(postNormSq);
+
+    const denom = userNorm * postNorm;
+    scores.set(post.id, denom > 0 ? dotProduct / denom : 0);
+  }
+
+  return candidates
+    .sort((a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0))
+    .slice(0, limit)
+    .map((p) => p.id);
+}
+
+/**
+ * 算法4：本文提出的多因子融合算法
+ * Score = α·CF + β·Sim + γ·SkillMatch + δ·Quality
+ */
+function multifactorRecommend(
+  currentUser: UserProfile,
+  allUsers: UserProfile[],
+  allPosts: PostData[],
+  limit: number
+): {
+  postIds: string[];
+  details: Map<string, { cf: number; sim: number; skill: number; quality: number; final: number }>;
+} {
+  const candidates = allPosts.filter((p) => p.userId !== currentUser.id);
+
+  // --- 因子α：协同过滤 ---
+  const similarities: Array<{ userId: string; similarity: number }> = [];
+  for (const other of allUsers) {
+    if (other.id === currentUser.id) continue;
+    const intersection = [...currentUser.likedPostIds].filter((id) =>
+      other.likedPostIds.has(id)
+    ).length;
+    const union = new Set([
+      ...currentUser.likedPostIds,
+      ...other.likedPostIds,
+    ]).size;
+    const sim = union > 0 ? intersection / union : 0;
+    if (sim > 0) similarities.push({ userId: other.id, similarity: sim });
+  }
+  const topNeighbors = similarities
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 20);
+
+  const cfScores = new Map<string, number>();
+  for (const post of candidates) {
+    if (
+      currentUser.likedPostIds.has(post.id) ||
+      currentUser.bookmarkedPostIds.has(post.id)
+    ) {
+      cfScores.set(post.id, 0);
+      continue;
+    }
+    let score = 0;
+    for (const neighbor of topNeighbors) {
+      const nu = allUsers.find((u) => u.id === neighbor.userId);
+      if (nu?.likedPostIds.has(post.id)) score += neighbor.similarity;
+    }
+    cfScores.set(post.id, score);
+  }
+
+  // --- 因子β：内容相似度（TF-IDF + 余弦） ---
+  const tagCounts = new Map<string, number>();
+  for (const post of allPosts) {
+    for (const tag of post.tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const totalPosts = allPosts.length;
+  const tagIDF = new Map<string, number>();
+  for (const [tag, count] of tagCounts) {
+    tagIDF.set(tag, Math.log((totalPosts + 1) / (count + 1)) + 1);
+  }
+
+  let userNormSq = 0;
+  for (const tag of currentUser.interests) {
+    const idf = tagIDF.get(tag) || 1;
+    userNormSq += idf * idf;
+  }
+  const userNorm = Math.sqrt(userNormSq);
+
+  const simScores = new Map<string, number>();
+  for (const post of candidates) {
+    if (post.tags.length === 0 || currentUser.interests.length === 0) {
+      simScores.set(post.id, 0);
+      continue;
+    }
+    let dotProduct = 0;
+    for (const tag of post.tags) {
+      if (currentUser.interests.includes(tag)) {
+        const idf = tagIDF.get(tag) || 1;
+        dotProduct += idf * idf;
+      }
+    }
+    let postNormSq = 0;
+    for (const tag of post.tags) {
+      const idf = tagIDF.get(tag) || 1;
+      postNormSq += idf * idf;
+    }
+    const postNorm = Math.sqrt(postNormSq);
+    const denom = userNorm * postNorm;
+    simScores.set(post.id, denom > 0 ? dotProduct / denom : 0);
+  }
+
+  // --- 因子γ：技能匹配度（高斯衰减 + 最近发展区）---
+  const sigma = 1.5;
+  const upwardBias = 0.5;
+  const skillScores = new Map<string, number>();
+  for (const post of candidates) {
+    const idealDiff = currentUser.skillLevel + upwardBias;
+    const diff = post.difficulty - idealDiff;
+    skillScores.set(post.id, Math.exp(-(diff * diff) / (2 * sigma * sigma)));
+  }
+
+  // --- 因子δ：帖子质量评分 ---
+  const interactionRaw = candidates.map(
+    (p) => p.likeCount + 2 * p.bookmarkCount + 1.5 * p.commentCount
+  );
+  const maxInteraction = Math.max(...interactionRaw, 1);
+  const maxCodeBlocks = Math.max(...candidates.map((p) => p.codeBlocks), 1);
+  const now = Date.now();
+  const decayRate = 0.02;
+
+  const qualityScores = new Map<string, number>();
+  for (let i = 0; i < candidates.length; i++) {
+    const post = candidates[i];
+    const interaction = interactionRaw[i] / maxInteraction;
+    const structure = post.codeBlocks / maxCodeBlocks;
+    const days = (now - post.createAt.getTime()) / (1000 * 60 * 60 * 24);
+    const freshness = Math.exp(-decayRate * days);
+    qualityScores.set(
+      post.id,
+      0.5 * interaction + 0.3 * structure + 0.2 * freshness
+    );
+  }
+
+  // --- 归一化 ---
+  function normalize(scores: Map<string, number>): Map<string, number> {
+    const values = [...scores.values()];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const result = new Map<string, number>();
+    for (const [k, v] of scores) {
+      result.set(k, range > 0 ? (v - min) / range : 0);
+    }
+    return result;
+  }
+
+  const normCF = normalize(cfScores);
+  const normSim = normalize(simScores);
+  const normSkill = normalize(skillScores);
+  const normQuality = normalize(qualityScores);
+
+  // --- 融合 ---
+  const details = new Map<
+    string,
+    { cf: number; sim: number; skill: number; quality: number; final: number }
+  >();
+
+  for (const post of candidates) {
+    const cf = normCF.get(post.id) || 0;
+    const sim = normSim.get(post.id) || 0;
+    const skill = normSkill.get(post.id) || 0;
+    const quality = normQuality.get(post.id) || 0;
+    const final_ =
+      WEIGHTS.alpha * cf +
+      WEIGHTS.beta * sim +
+      WEIGHTS.gamma * skill +
+      WEIGHTS.delta * quality;
+    details.set(post.id, { cf, sim, skill, quality, final: final_ });
+  }
+
+  const sorted = candidates
+    .sort(
+      (a, b) =>
+        (details.get(b.id)?.final || 0) - (details.get(a.id)?.final || 0)
+    )
+    .slice(0, limit);
+
+  return { postIds: sorted.map((p) => p.id), details };
+}
+
+// ==================== 评估指标 ====================
+
 function precisionAtK(
-  recommendedPostIds: string[],
-  relevantPostIds: Set<string>,
+  recommended: string[],
+  relevant: Set<string>,
   k: number
 ): number {
-  const topK = recommendedPostIds.slice(0, k);
-  const hits = topK.filter((id) => relevantPostIds.has(id)).length;
+  const topK = recommended.slice(0, k);
+  const hits = topK.filter((id) => relevant.has(id)).length;
   return hits / k;
 }
 
-/**
- * 召回率 (Recall@K)
- * 用户感兴趣的帖子中，有多少被推荐到了
- */
 function recallAtK(
-  recommendedPostIds: string[],
-  relevantPostIds: Set<string>,
+  recommended: string[],
+  relevant: Set<string>,
   k: number
 ): number {
-  if (relevantPostIds.size === 0) return 0;
-  const topK = recommendedPostIds.slice(0, k);
-  const hits = topK.filter((id) => relevantPostIds.has(id)).length;
-  return hits / relevantPostIds.size;
+  if (relevant.size === 0) return 0;
+  const topK = recommended.slice(0, k);
+  const hits = topK.filter((id) => relevant.has(id)).length;
+  return hits / relevant.size;
 }
 
-/**
- * 标签覆盖率 (Tag Coverage)
- * 推荐列表覆盖了多少不同的标签（多样性指标）
- */
+function difficultyMatchRate(
+  recommendedIds: string[],
+  allPosts: PostData[],
+  userLevel: number
+): number {
+  if (recommendedIds.length === 0) return 0;
+  const postMap = new Map(allPosts.map((p) => [p.id, p]));
+  const matched = recommendedIds.filter((id) => {
+    const post = postMap.get(id);
+    return post && Math.abs(post.difficulty - userLevel) <= 1;
+  }).length;
+  return matched / recommendedIds.length;
+}
+
 function tagCoverage(
-  recommendedPosts: Array<{ tags: string[] }>,
+  recommendedIds: string[],
+  allPosts: PostData[],
   allTags: Set<string>
 ): number {
-  const coveredTags = new Set<string>();
-  for (const post of recommendedPosts) {
-    for (const tag of post.tags) {
-      coveredTags.add(tag);
+  const postMap = new Map(allPosts.map((p) => [p.id, p]));
+  const covered = new Set<string>();
+  for (const id of recommendedIds) {
+    const post = postMap.get(id);
+    if (post) {
+      for (const tag of post.tags) covered.add(tag);
     }
   }
-  return coveredTags.size / allTags.size;
+  return covered.size / allTags.size;
 }
 
-/**
- * 难度匹配率 (Difficulty Match Rate)
- * 推荐帖子难度与用户技能等级差距在±1以内的比例
- */
-function difficultyMatchRate(
-  recommendedPosts: Array<{ difficulty: number }>,
-  userSkillLevel: number
-): number {
-  if (recommendedPosts.length === 0) return 0;
-  const matched = recommendedPosts.filter(
-    (p) => Math.abs(p.difficulty - userSkillLevel) <= 1
-  ).length;
-  return matched / recommendedPosts.length;
-}
-
-// ==================== 主分析函数 ====================
+// ==================== 主实验函数 ====================
 
 async function runExperiment() {
-  console.log("🔬 开始推荐算法对比实验\n");
-  console.log("=".repeat(60));
+  console.log("🔬 推荐算法对比实验");
+  console.log("=".repeat(70));
+  console.log();
 
-  // 获取测试用户（按技能等级均匀采样）
-  const testUsers = await prisma.user.findMany({
+  // 加载所有数据
+  console.log("📦 加载数据...");
+
+  const allPostsRaw = await prisma.post.findMany({
+    select: {
+      id: true,
+      userId: true,
+      tags: true,
+      difficulty: true,
+      codeBlocks: true,
+      createAt: true,
+      _count: { select: { likes: true, bookmarks: true, comments: true } },
+    },
+  });
+
+  const allPosts: PostData[] = allPostsRaw.map((p) => ({
+    id: p.id,
+    userId: p.userId,
+    tags: p.tags,
+    difficulty: p.difficulty,
+    codeBlocks: p.codeBlocks,
+    createAt: p.createAt,
+    likeCount: p._count.likes,
+    bookmarkCount: p._count.bookmarks,
+    commentCount: p._count.comments,
+  }));
+
+  const allUsersRaw = await prisma.user.findMany({
     select: {
       id: true,
       username: true,
@@ -96,167 +442,294 @@ async function runExperiment() {
       likes: { select: { postId: true } },
       bookmarks: { select: { postId: true } },
     },
-    take: 30, // 取30个用户做实验
   });
 
-  // 获取所有标签集合
-  const allPosts = await prisma.post.findMany({
-    select: { id: true, tags: true, difficulty: true },
-  });
+  const allUsers: UserProfile[] = allUsersRaw.map((u) => ({
+    id: u.id,
+    skillLevel: u.skillLevel,
+    interests: u.interests,
+    likedPostIds: new Set(u.likes.map((l) => l.postId)),
+    bookmarkedPostIds: new Set(u.bookmarks.map((b) => b.postId)),
+  }));
+
   const allTags = new Set(allPosts.flatMap((p) => p.tags));
 
-  const K_VALUES = [5, 10, 20]; // 评估不同 TopK
+  // 选取有足够互动数据的测试用户（至少点赞过3篇且有兴趣标签）
+  const testUsers = allUsersRaw.filter(
+    (u) => u.likes.length >= 3 && u.interests.length > 0
+  );
 
-  // 四种算法的实验结果
+  console.log(`  帖子总数: ${allPosts.length}`);
+  console.log(`  用户总数: ${allUsersRaw.length}`);
+  console.log(`  测试用户: ${testUsers.length} (点赞≥3且有兴趣标签)`);
+  console.log(`  标签种类: ${allTags.size}`);
+  console.log();
+
+  const K = 10;
+
+  // 四种算法的结果
   const results = {
-    multiFactor: { precision: [] as number[], recall: [] as number[], diffMatch: [] as number[], coverage: [] as number[] },
     timeBased: { precision: [] as number[], recall: [] as number[], diffMatch: [] as number[], coverage: [] as number[] },
     pureCF: { precision: [] as number[], recall: [] as number[], diffMatch: [] as number[], coverage: [] as number[] },
     pureContent: { precision: [] as number[], recall: [] as number[], diffMatch: [] as number[], coverage: [] as number[] },
+    multiFactor: { precision: [] as number[], recall: [] as number[], diffMatch: [] as number[], coverage: [] as number[] },
   };
 
-  for (const user of testUsers) {
-    // 该用户的"相关"帖子 = 与兴趣标签匹配的帖子
-    const relevantPostIds = new Set(
+  const factorSums = { cf: 0, sim: 0, skill: 0, quality: 0, count: 0 };
+
+  console.log(`🏃 对 ${testUsers.length} 个用户运行四种算法 (Top${K})...`);
+
+  for (let idx = 0; idx < testUsers.length; idx++) {
+    const rawUser = testUsers[idx];
+    const user = allUsers.find((u) => u.id === rawUser.id)!;
+
+    const relevant = new Set(
       allPosts
-        .filter((p) => p.tags.some((t) => user.interests.includes(t)))
+        .filter(
+          (p) =>
+            p.userId !== user.id &&
+            p.tags.some((t) => user.interests.includes(t))
+        )
         .map((p) => p.id)
     );
 
-    const K = 10; // 主要评估 Top10
+    // 1. 时间排序
+    const timeRec = timeBasedRecommend(user.id, allPosts, K);
+    results.timeBased.precision.push(precisionAtK(timeRec, relevant, K));
+    results.timeBased.recall.push(recallAtK(timeRec, relevant, K));
+    results.timeBased.diffMatch.push(difficultyMatchRate(timeRec, allPosts, user.skillLevel));
+    results.timeBased.coverage.push(tagCoverage(timeRec, allPosts, allTags));
 
-    // 1. 多因子融合算法（本文提出）
-    try {
-      const mfResult = await getRecommendations(user.id, K, true);
-      const mfPostIds = mfResult.recommendations.map((r) => r.postId);
-      const mfPosts = allPosts.filter((p) => mfPostIds.includes(p.id));
+    // 2. 纯协同过滤
+    const cfRec = pureCFRecommend(user, allUsers, allPosts, K);
+    results.pureCF.precision.push(precisionAtK(cfRec, relevant, K));
+    results.pureCF.recall.push(recallAtK(cfRec, relevant, K));
+    results.pureCF.diffMatch.push(difficultyMatchRate(cfRec, allPosts, user.skillLevel));
+    results.pureCF.coverage.push(tagCoverage(cfRec, allPosts, allTags));
 
-      results.multiFactor.precision.push(precisionAtK(mfPostIds, relevantPostIds, K));
-      results.multiFactor.recall.push(recallAtK(mfPostIds, relevantPostIds, K));
-      results.multiFactor.diffMatch.push(difficultyMatchRate(mfPosts, user.skillLevel));
-      results.multiFactor.coverage.push(tagCoverage(mfPosts, allTags));
-    } catch (e) {
-      console.error(`  用户 ${user.username} 多因子算法失败:`, e);
+    // 3. 纯内容推荐
+    const contentRec = pureContentRecommend(user, allPosts, K);
+    results.pureContent.precision.push(precisionAtK(contentRec, relevant, K));
+    results.pureContent.recall.push(recallAtK(contentRec, relevant, K));
+    results.pureContent.diffMatch.push(difficultyMatchRate(contentRec, allPosts, user.skillLevel));
+    results.pureContent.coverage.push(tagCoverage(contentRec, allPosts, allTags));
+
+    // 4. 本文多因子融合算法
+    const mfResult = multifactorRecommend(user, allUsers, allPosts, K);
+    results.multiFactor.precision.push(precisionAtK(mfResult.postIds, relevant, K));
+    results.multiFactor.recall.push(recallAtK(mfResult.postIds, relevant, K));
+    results.multiFactor.diffMatch.push(difficultyMatchRate(mfResult.postIds, allPosts, user.skillLevel));
+    results.multiFactor.coverage.push(tagCoverage(mfResult.postIds, allPosts, allTags));
+
+    for (const postId of mfResult.postIds) {
+      const d = mfResult.details.get(postId);
+      if (d) {
+        factorSums.cf += d.cf;
+        factorSums.sim += d.sim;
+        factorSums.skill += d.skill;
+        factorSums.quality += d.quality;
+        factorSums.count++;
+      }
     }
 
-    // 2. 时间排序（基线1）
-    try {
-      const timePostIds = await getTimeBasedRecommendations(user.id, K);
-      const timePosts = allPosts.filter((p) => timePostIds.includes(p.id));
-
-      results.timeBased.precision.push(precisionAtK(timePostIds, relevantPostIds, K));
-      results.timeBased.recall.push(recallAtK(timePostIds, relevantPostIds, K));
-      results.timeBased.diffMatch.push(difficultyMatchRate(timePosts, user.skillLevel));
-      results.timeBased.coverage.push(tagCoverage(timePosts, allTags));
-    } catch (e) {
-      console.error(`  用户 ${user.username} 时间排序失败:`, e);
+    if ((idx + 1) % 10 === 0 || idx === testUsers.length - 1) {
+      process.stdout.write(`  已完成 ${idx + 1}/${testUsers.length}\r`);
     }
-
-    // 3. 纯协同过滤（基线2）
-    try {
-      const cfPostIds = await getPureCFRecommendations(user.id, K);
-      const cfPosts = allPosts.filter((p) => cfPostIds.includes(p.id));
-
-      results.pureCF.precision.push(precisionAtK(cfPostIds, relevantPostIds, K));
-      results.pureCF.recall.push(recallAtK(cfPostIds, relevantPostIds, K));
-      results.pureCF.diffMatch.push(difficultyMatchRate(cfPosts, user.skillLevel));
-      results.pureCF.coverage.push(tagCoverage(cfPosts, allTags));
-    } catch (e) {
-      console.error(`  用户 ${user.username} 协同过滤失败:`, e);
-    }
-
-    // 4. 纯内容推荐（基线3）
-    try {
-      const contentPostIds = await getPureContentRecommendations(user.id, K);
-      const contentPosts = allPosts.filter((p) => contentPostIds.includes(p.id));
-
-      results.pureContent.precision.push(precisionAtK(contentPostIds, relevantPostIds, K));
-      results.pureContent.recall.push(recallAtK(contentPostIds, relevantPostIds, K));
-      results.pureContent.diffMatch.push(difficultyMatchRate(contentPosts, user.skillLevel));
-      results.pureContent.coverage.push(tagCoverage(contentPosts, allTags));
-    } catch (e) {
-      console.error(`  用户 ${user.username} 内容推荐失败:`, e);
-    }
-
-    process.stdout.write(".");
   }
 
   console.log("\n");
 
-  // ===== 输出实验结果表格 =====
+  // ==================== 输出结果 ====================
+
   const avg = (arr: number[]) =>
     arr.length > 0
-      ? (arr.reduce((a, b) => a + b, 0) / arr.length * 100).toFixed(2) + "%"
-      : "N/A";
+      ? (arr.reduce((a, b) => a + b, 0) / arr.length) * 100
+      : 0;
 
-  console.log("=".repeat(60));
-  console.log("📊 实验结果（可直接用于论文表格）");
-  console.log("=".repeat(60));
-  console.log(`评估指标 @ Top10 (${testUsers.length} 个测试用户的平均值)\n`);
+  const fmt = (n: number) => n.toFixed(2) + "%";
 
+  // 表1：四种算法对比
+  console.log("=".repeat(70));
+  console.log("📊 表1：推荐算法对比实验结果（Top10，所有测试用户平均值）");
+  console.log("=".repeat(70));
+  console.log();
   console.log(
-    "算法名称".padEnd(20) +
-    "Precision".padEnd(14) +
-    "Recall".padEnd(14) +
-    "难度匹配率".padEnd(14) +
-    "标签覆盖率".padEnd(14)
+    "算法".padEnd(22) +
+      "Precision@10".padEnd(16) +
+      "Recall@10".padEnd(16) +
+      "难度匹配率".padEnd(16) +
+      "标签覆盖率".padEnd(16)
   );
-  console.log("-".repeat(72));
+  console.log("-".repeat(70));
 
   const algorithms = [
-    { name: "时间排序（基线）", data: results.timeBased },
-    { name: "协同过滤（基线）", data: results.pureCF },
-    { name: "内容推荐（基线）", data: results.pureContent },
+    { name: "时间排序（基线1）", data: results.timeBased },
+    { name: "协同过滤（基线2）", data: results.pureCF },
+    { name: "内容推荐（基线3）", data: results.pureContent },
     { name: "本文算法 ★", data: results.multiFactor },
   ];
 
   for (const algo of algorithms) {
     console.log(
-      algo.name.padEnd(20) +
-      avg(algo.data.precision).padEnd(14) +
-      avg(algo.data.recall).padEnd(14) +
-      avg(algo.data.diffMatch).padEnd(14) +
-      avg(algo.data.coverage).padEnd(14)
+      algo.name.padEnd(22) +
+        fmt(avg(algo.data.precision)).padEnd(16) +
+        fmt(avg(algo.data.recall)).padEnd(16) +
+        fmt(avg(algo.data.diffMatch)).padEnd(16) +
+        fmt(avg(algo.data.coverage)).padEnd(16)
     );
   }
 
-  console.log("-".repeat(72));
+  console.log("-".repeat(70));
 
-  // ===== 输出各因子得分分布（用于论文雷达图）=====
-  console.log("\n📊 本文算法各因子平均得分分布（用于雷达图）");
-  console.log("=".repeat(40));
+  const mfPrec = avg(results.multiFactor.precision);
+  const basePrec = avg(results.timeBased.precision);
+  const mfDiff = avg(results.multiFactor.diffMatch);
+  const baseDiff = avg(results.timeBased.diffMatch);
 
-  // 取一个样本用户详细分析
-  const sampleUser = testUsers[0];
-  const sampleResult = await getRecommendations(sampleUser.id, 20, true);
+  console.log();
+  console.log("📈 本文算法相比时间排序基线：");
+  console.log(
+    `   Precision 提升: ${basePrec > 0 ? (((mfPrec - basePrec) / basePrec) * 100).toFixed(1) : "N/A"}%`
+  );
+  console.log(
+    `   难度匹配率提升: ${baseDiff > 0 ? (((mfDiff - baseDiff) / baseDiff) * 100).toFixed(1) : "N/A"}%`
+  );
 
-  const avgDetails = {
-    cfScore: 0,
-    simScore: 0,
-    skillScore: 0,
-    qualityScore: 0,
-  };
+  // 表2：各因子平均贡献度（雷达图数据）
+  console.log();
+  console.log("=".repeat(70));
+  console.log("📊 表2：本文算法各因子平均得分（用于雷达图）");
+  console.log("=".repeat(70));
+  console.log();
 
-  for (const rec of sampleResult.recommendations) {
-    if (rec.details) {
-      avgDetails.cfScore += rec.details.cfScore;
-      avgDetails.simScore += rec.details.simScore;
-      avgDetails.skillScore += rec.details.skillScore;
-      avgDetails.qualityScore += rec.details.qualityScore;
+  const count = factorSums.count || 1;
+  console.log(`  协同过滤因子 (α=0.3):  ${(factorSums.cf / count).toFixed(4)}`);
+  console.log(`  内容相似因子 (β=0.25): ${(factorSums.sim / count).toFixed(4)}`);
+  console.log(`  技能匹配因子 (γ=0.25): ${(factorSums.skill / count).toFixed(4)}`);
+  console.log(`  质量评估因子 (δ=0.2):  ${(factorSums.quality / count).toFixed(4)}`);
+
+  // 表3：不同 K 值的 Precision 变化（折线图数据）
+  console.log();
+  console.log("=".repeat(70));
+  console.log("📊 表3：不同 K 值下各算法 Precision 变化（用于折线图）");
+  console.log("=".repeat(70));
+  console.log();
+
+  const K_VALUES = [5, 10, 15, 20];
+  console.log(
+    "K值".padEnd(8) +
+      "时间排序".padEnd(14) +
+      "协同过滤".padEnd(14) +
+      "内容推荐".padEnd(14) +
+      "本文算法".padEnd(14)
+  );
+  console.log("-".repeat(60));
+
+  for (const k of K_VALUES) {
+    const kResults = {
+      time: [] as number[],
+      cf: [] as number[],
+      content: [] as number[],
+      mf: [] as number[],
+    };
+
+    for (const rawUser of testUsers) {
+      const user = allUsers.find((u) => u.id === rawUser.id)!;
+      const relevant = new Set(
+        allPosts
+          .filter(
+            (p) =>
+              p.userId !== user.id &&
+              p.tags.some((t) => user.interests.includes(t))
+          )
+          .map((p) => p.id)
+      );
+
+      const timeRec = timeBasedRecommend(user.id, allPosts, k);
+      const cfRec = pureCFRecommend(user, allUsers, allPosts, k);
+      const contentRec = pureContentRecommend(user, allPosts, k);
+      const mfRec = multifactorRecommend(user, allUsers, allPosts, k);
+
+      kResults.time.push(precisionAtK(timeRec, relevant, k));
+      kResults.cf.push(precisionAtK(cfRec, relevant, k));
+      kResults.content.push(precisionAtK(contentRec, relevant, k));
+      kResults.mf.push(precisionAtK(mfRec.postIds, relevant, k));
     }
+
+    console.log(
+      `K=${k}`.padEnd(8) +
+        fmt(avg(kResults.time)).padEnd(14) +
+        fmt(avg(kResults.cf)).padEnd(14) +
+        fmt(avg(kResults.content)).padEnd(14) +
+        fmt(avg(kResults.mf)).padEnd(14)
+    );
   }
 
-  const count = sampleResult.recommendations.length;
-  console.log(`样本用户: ${sampleUser.displayName} (Lv${sampleUser.skillLevel})`);
-  console.log(`兴趣标签: ${sampleUser.interests.join(", ")}`);
-  console.log(`推荐帖子数: ${count}`);
-  console.log(`协同过滤均分: ${(avgDetails.cfScore / count).toFixed(4)}`);
-  console.log(`内容相似均分: ${(avgDetails.simScore / count).toFixed(4)}`);
-  console.log(`技能匹配均分: ${(avgDetails.skillScore / count).toFixed(4)}`);
-  console.log(`质量评估均分: ${(avgDetails.qualityScore / count).toFixed(4)}`);
-  console.log(`计算耗时: ${sampleResult.meta.computeTimeMs}ms`);
+  console.log("-".repeat(60));
+
+  // 表4：不同技能等级用户的难度匹配率（分组柱状图数据）
+  console.log();
+  console.log("=".repeat(70));
+  console.log("📊 表4：不同技能等级用户的难度匹配率对比（用于柱状图）");
+  console.log("=".repeat(70));
+  console.log();
+
+  console.log(
+    "用户等级".padEnd(12) +
+      "时间排序".padEnd(14) +
+      "协同过滤".padEnd(14) +
+      "内容推荐".padEnd(14) +
+      "本文算法".padEnd(14)
+  );
+  console.log("-".repeat(60));
+
+  for (let level = 1; level <= 5; level++) {
+    const levelUsers = testUsers.filter(
+      (u) => allUsers.find((au) => au.id === u.id)?.skillLevel === level
+    );
+
+    if (levelUsers.length === 0) {
+      console.log(`Lv${level}`.padEnd(12) + "无测试用户");
+      continue;
+    }
+
+    const levelResults = {
+      time: [] as number[],
+      cf: [] as number[],
+      content: [] as number[],
+      mf: [] as number[],
+    };
+
+    for (const rawUser of levelUsers) {
+      const user = allUsers.find((u) => u.id === rawUser.id)!;
+
+      const timeRec = timeBasedRecommend(user.id, allPosts, K);
+      const cfRec = pureCFRecommend(user, allUsers, allPosts, K);
+      const contentRec = pureContentRecommend(user, allPosts, K);
+      const mfRec = multifactorRecommend(user, allUsers, allPosts, K);
+
+      levelResults.time.push(difficultyMatchRate(timeRec, allPosts, user.skillLevel));
+      levelResults.cf.push(difficultyMatchRate(cfRec, allPosts, user.skillLevel));
+      levelResults.content.push(difficultyMatchRate(contentRec, allPosts, user.skillLevel));
+      levelResults.mf.push(difficultyMatchRate(mfRec.postIds, allPosts, user.skillLevel));
+    }
+
+    console.log(
+      `Lv${level} (${levelUsers.length}人)`.padEnd(12) +
+        fmt(avg(levelResults.time)).padEnd(14) +
+        fmt(avg(levelResults.cf)).padEnd(14) +
+        fmt(avg(levelResults.content)).padEnd(14) +
+        fmt(avg(levelResults.mf)).padEnd(14)
+    );
+  }
+
+  console.log("-".repeat(60));
 
   console.log("\n🎉 实验完成！以上数据可直接用于论文的实验分析章节。");
+  console.log("   表1 → 算法对比总表");
+  console.log("   表2 → 各因子贡献雷达图");
+  console.log("   表3 → Precision@K 折线图");
+  console.log("   表4 → 分等级难度匹配柱状图");
 }
 
 runExperiment()
@@ -264,6 +737,4 @@ runExperiment()
     console.error("❌ 实验失败:", e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

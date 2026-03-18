@@ -10,28 +10,30 @@ generator client {
 }
 
 model User {
-  id              String           @id
-  username        String           @unique
-  displayName     String
-  email           String?          @unique
-  passwordHash    String?
-  googleId        String?          @unique
-  avatarUrl       String?
-  bio             String?
-  skillLevel      Int              @default(1)
-  interests       String[]         @default([])
-  session         Session[]
-  posts           Post[]
-  following       Follow[]         @relation("Following")
-  followers       Follow[]         @relation("Followers")
-  likes           Like[]
-  bookmarks       Bookmark[]
-  comments        Comment[]
-  commentLikes    CommentLike[]
-  aiConversations AiConversation[]
-  quizSubmissions QuizSubmission[]
-  receivedNotifications Notification[] @relation("Recipient")
-  issuedNotifications Notification[] @relation("Issuer")
+  id                    String           @id
+  username              String           @unique
+  displayName           String
+  email                 String?          @unique
+  passwordHash          String?
+  googleId              String?          @unique
+  avatarUrl             String?
+  bio                   String?
+  skillLevel            Int              @default(1)
+  interests             String[]         @default([])
+  session               Session[]
+  posts                 Post[]
+  following             Follow[]         @relation("Following")
+  followers             Follow[]         @relation("Followers")
+  likes                 Like[]
+  bookmarks             Bookmark[]
+  comments              Comment[]
+  commentLikes          CommentLike[]
+  aiConversations       AiConversation[]
+  quizSubmissions       QuizSubmission[]
+  notebooks             Notebook[]
+  notebookFolders       NotebookFolder[]
+  receivedNotifications Notification[]   @relation("Recipient")
+  issuedNotifications   Notification[]   @relation("Issuer")
 
   createAt DateTime @default(now())
 
@@ -58,17 +60,17 @@ model Follow {
 }
 
 model Post {
-  id          String     @id @default(cuid())
-  content     String
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attachments Media[]
-  likes       Like[]
-  bookmarks   Bookmark[]
-  comments    Comment[]
-  tags        String[]   @default([])
-  difficulty  Int        @default(1)
-  codeBlocks  Int        @default(0)
+  id                  String         @id @default(cuid())
+  content             String
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments         Media[]
+  likes               Like[]
+  bookmarks           Bookmark[]
+  comments            Comment[]
+  tags                String[]       @default([])
+  difficulty          Int            @default(1)
+  codeBlocks          Int            @default(0)
   linkedNotifications Notification[]
 
   createAt DateTime @default(now())
@@ -204,24 +206,56 @@ model QuizSubmission {
   @@map("quiz_submissions")
 }
 
-model Notification{
-  id String @id @default(cuid())
+model Notification {
+  id          String           @id @default(cuid())
   recipientId String
-  recipient   User   @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  issuserId String
-  issuer   User   @relation("Issuer", fields: [issuserId], references: [id], onDelete: Cascade)
-  postId String?
-  post  Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  type NotificationType
-  read Boolean @default(false)
+  recipient   User             @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  issuserId   String
+  issuer      User             @relation("Issuer", fields: [issuserId], references: [id], onDelete: Cascade)
+  postId      String?
+  post        Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  read        Boolean          @default(false)
 
   createAt DateTime @default(now())
 
   @@map("notifications")
 }
 
-enum NotificationType{
+enum NotificationType {
   LIKE
   FOLLOW
   COMMENT
+}
+
+model NotebookFolder {
+  id        String     @id @default(cuid())
+  name      String
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notebooks Notebook[]
+  order     Int        @default(0)
+
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@map("notebook_folders")
+}
+
+model Notebook {
+  id       String          @id @default(cuid())
+  title    String          @default("无标题笔记")
+  content  String          @default("")
+  userId   String
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId String?
+  folder   NotebookFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  tags     String[]        @default([])
+  pinned   Boolean         @default(false)
+
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  @@map("notebooks")
 }

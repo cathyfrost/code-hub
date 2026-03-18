@@ -164,3 +164,33 @@ export interface CommentLikeInfo {
 export interface BookmarkInfo {
   isBookmarkedByUser: boolean;
 }
+
+export function getNotebookDataInclude() {
+  return {
+    folder: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+  } satisfies Prisma.NotebookInclude;
+}
+
+export type NotebookData = Prisma.NotebookGetPayload<{
+  include: ReturnType<typeof getNotebookDataInclude>;
+}>;
+
+export interface NotebooksPage {
+  notebooks: NotebookData[];
+  nextCursor: string | null;
+}
+
+export type FolderData = Prisma.NotebookFolderGetPayload<{
+  include: {
+    _count: {
+      select: {
+        notebooks: true;
+      };
+    };
+  };
+}>;
