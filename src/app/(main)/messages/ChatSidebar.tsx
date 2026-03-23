@@ -137,7 +137,7 @@ function CustomChannelPreview(props: CustomChannelPreviewProps) {
         setActiveChannel(undefined);
       }
       toast({
-        description: "聊天已隐藏（聊天记录保留）",
+        description: "聊天已隐藏",
       });
     } catch (error) {
       console.error("Hide channel failed", error);

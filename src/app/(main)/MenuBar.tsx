@@ -1,7 +1,7 @@
 import { validateRequest } from "@/auth"
 import { Button } from "@/components/ui/button"
 import prisma from "@/lib/prisma"
-import { Bookmark, Home, Mail, Code, ClipboardList, Bot, BarChart3, NotebookPen } from "lucide-react"
+import { Bookmark, Home,  Code, ClipboardList, Bot, BarChart3, NotebookPen } from "lucide-react"
 import Link from "next/link"
 import NotificationsButton from "./NotificationsButton"
 import MessagesButton from "./MessagesButton"
@@ -18,12 +18,18 @@ export default async function MenuBar({ className }: MenuBarProps) {
 
   const [unreadNotificationCount, unreadMessagesCount] = await Promise.all([
     prisma.notification.count({
-    where: {
-      recipientId: user.id,
-      read: false,
-    },
-  }),
-  (await streamServerClient.getUnreadCount(user.id)).total_unread_count
+      where: {
+        recipientId: user.id,
+        read: false,
+      },
+    }),
+    (async () => {
+      try {
+        return (await streamServerClient.getUnreadCount(user.id)).total_unread_count;
+      } catch {
+        return 0;
+      }
+    })()
   ])
 
   return (
@@ -38,7 +44,8 @@ export default async function MenuBar({ className }: MenuBarProps) {
       <NotificationsButton initialState={{ unreadCount: unreadNotificationCount }} />
 
       <MessagesButton 
-      initialState={{unreadCount: unreadMessagesCount}}/>
+        initialState={{ unreadCount: unreadMessagesCount }}
+      />
       <Button variant="ghost" className="flex items-center justify-start gap-3" title="收藏" asChild>
         <Link href="/bookmarks">
           <Bookmark />

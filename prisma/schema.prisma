@@ -96,16 +96,17 @@ enum MediaType {
 }
 
 model Comment {
-  id       String        @id @default(cuid())
-  content  String
-  userId   String
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId   String
-  post     Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentId String?
-  parent   Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies  Comment[]     @relation("CommentReplies")
-  likes    CommentLike[]
+  id            String         @id @default(cuid())
+  content       String
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId        String
+  post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId      String?
+  parent        Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Comment[]      @relation("CommentReplies")
+  likes         CommentLike[]
+  notifications Notification[]
 
   createAt DateTime @default(now())
 
@@ -214,6 +215,8 @@ model Notification {
   issuer      User             @relation("Issuer", fields: [issuerId], references: [id], onDelete: Cascade)
   postId      String?
   post        Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId   String?
+  comment     Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
   type        NotificationType
   read        Boolean          @default(false)
 
