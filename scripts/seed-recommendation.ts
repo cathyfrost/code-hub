@@ -1077,17 +1077,20 @@ async function main() {
 
     const postId = generateId();
 
-    await prisma.post.create({
-      data: {
-        id: postId,
-        content: template.content,
-        userId: author.id,
-        tags: template.tags,
-        difficulty: template.difficulty,
-        codeBlocks: template.codeBlocks,
-        createAt: randomDate(90),
-      },
-    });
+    const hashtags = template.tags.map((t) => `#${t}`).join(" ");
+const contentWithTags = template.content.trimEnd() + "\n\n" + hashtags;
+
+await prisma.post.create({
+  data: {
+    id: postId,
+    content: contentWithTags,  // 这里改成 contentWithTags
+    userId: author.id,
+    tags: template.tags,
+    difficulty: template.difficulty,
+    codeBlocks: template.codeBlocks,
+    createAt: randomDate(90),
+  },
+});
 
     posts.push({ id: postId, userId: author.id, tags: template.tags, difficulty: template.difficulty });
   }

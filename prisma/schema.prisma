@@ -55,6 +55,8 @@ model Follow {
   followingId String
   following   User   @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
+  createAt DateTime @default(now())
+  
   @@unique([followerId, followingId])
   @@map("follows")
 }
