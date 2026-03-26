@@ -10,20 +10,21 @@ generator client {
 }
 
 model User {
-  id                    String           @id
-  username              String           @unique
+  id                    String             @id
+  username              String             @unique
   displayName           String
-  email                 String?          @unique
+  email                 String?            @unique
   passwordHash          String?
-  googleId              String?          @unique
+  googleId              String?            @unique
   avatarUrl             String?
   bio                   String?
-  skillLevel            Int              @default(1)
-  interests             String[]         @default([])
+  skillLevel            Int                @default(1)
+  interests             String[]           @default([])
+  points                Int                @default(100)
   session               Session[]
   posts                 Post[]
-  following             Follow[]         @relation("Following")
-  followers             Follow[]         @relation("Followers")
+  following             Follow[]           @relation("Following")
+  followers             Follow[]           @relation("Followers")
   likes                 Like[]
   bookmarks             Bookmark[]
   comments              Comment[]
@@ -32,8 +33,9 @@ model User {
   quizSubmissions       QuizSubmission[]
   notebooks             Notebook[]
   notebookFolders       NotebookFolder[]
-  receivedNotifications Notification[]   @relation("Recipient")
-  issuedNotifications   Notification[]   @relation("Issuer")
+  receivedNotifications Notification[]     @relation("Recipient")
+  issuedNotifications   Notification[]     @relation("Issuer")
+  pointTransactions     PointTransaction[]
 
   createAt DateTime @default(now())
 
@@ -56,7 +58,7 @@ model Follow {
   following   User   @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
   createAt DateTime @default(now())
-  
+
   @@unique([followerId, followingId])
   @@map("follows")
 }
@@ -74,6 +76,12 @@ model Post {
   difficulty          Int            @default(1)
   codeBlocks          Int            @default(0)
   linkedNotifications Notification[]
+  // ── 问答悬赏字段 ──
+  isQuestion          Boolean        @default(false)
+  bounty              Int            @default(0)
+  isResolved          Boolean        @default(false)
+  acceptedCommentId   String?        @unique
+  acceptedComment     Comment?       @relation("AcceptedAnswer", fields: [acceptedCommentId], references: [id], onDelete: SetNull)
 
   createAt DateTime @default(now())
 
@@ -98,17 +106,19 @@ enum MediaType {
 }
 
 model Comment {
-  id            String         @id @default(cuid())
-  content       String
-  userId        String
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId        String
-  post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentId      String?
-  parent        Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies       Comment[]      @relation("CommentReplies")
-  likes         CommentLike[]
-  notifications Notification[]
+  id              String         @id @default(cuid())
+  content         String
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId          String
+  post            Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId        String?
+  parent          Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies         Comment[]      @relation("CommentReplies")
+  likes           CommentLike[]
+  notifications   Notification[]
+  // 反向关联：该评论被哪个帖子采纳为最佳答案
+  acceptedForPost Post?          @relation("AcceptedAnswer")
 
   createAt DateTime @default(now())
 
@@ -231,6 +241,7 @@ enum NotificationType {
   LIKE
   FOLLOW
   COMMENT
+  BOUNTY_ACCEPTED
 }
 
 model NotebookFolder {
@@ -246,6 +257,28 @@ model NotebookFolder {
 
   @@unique([userId, name])
   @@map("notebook_folders")
+}
+
+model PointTransaction {
+  id     String               @id @default(cuid())
+  userId String
+  user   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount Int
+  type   PointTransactionType
+  postId String?
+  detail String?
+
+  createAt DateTime @default(now())
+
+  @@map("point_transactions")
+}
+
+enum PointTransactionType {
+  INITIAL_BONUS
+  BOUNTY_PLACED
+  BOUNTY_EARNED
+  BOUNTY_REFUND
+  DAILY_SIGNIN
 }
 
 model Notebook {

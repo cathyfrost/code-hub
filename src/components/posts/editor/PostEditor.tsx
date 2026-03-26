@@ -273,6 +273,7 @@ export default function PostEditor() {
     onDrop: startUpload,
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { onClick, ...rootProps } = getRootProps();
 
   const editor = useEditor({
@@ -544,6 +545,7 @@ interface AttachmentPreviewProps {
 }
 
 function AttachmentPreview({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   attachment: { file, mediaId, isUploading },
   onRemoveClick,
 }: AttachmentPreviewProps) {
