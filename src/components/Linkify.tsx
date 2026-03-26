@@ -39,7 +39,7 @@ function LinkifyUsername({ children }: LinkifyProps) {
 
 function LinkifyHashtag({children}: LinkifyProps){
     return <LinkIt
-    regex={/(#[\w\u4e00-\u9fff]+)/}
+    regex={/(#[\w\u4e00-\u9fff][\w\u4e00-\u9fff.]*)/}
     component={(match, key)=>(
         <Link key={key} href={`/hashtag/${match.slice(1)}`}
         className="text-primary hover:underline"

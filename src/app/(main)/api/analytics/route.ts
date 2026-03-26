@@ -195,6 +195,18 @@ export async function GET() {
       value: Number(row.count),
     }));
 
+    // 5b. 用户自己的帖子标签分布
+    const userTagCount: Record<string, number> = {};
+    userPosts.forEach((post) => {
+      post.tags.forEach((tag) => {
+        userTagCount[tag] = (userTagCount[tag] || 0) + 1;
+      });
+    });
+    const userTagDistribution = Object.entries(userTagCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+
     // 6. 题库难度分布
     const quizDifficultyMap: Record<string, { total: number; passed: number }> = {};
     quizSubmissions.forEach((sub) => {
@@ -239,23 +251,16 @@ export async function GET() {
     });
     const heatmapData = Object.entries(activityMap).map(([date, count]) => ({ date, count }));
 
-    // 9. 技能雷达图
+    // 9. 技能雷达图（基于全站帖子 hashtag，与标签分布同源）
     const skillMap: Record<string, number> = {};
-    userPosts.forEach((post) => {
-      post.tags.forEach((tag) => {
-        const category = mapTagToSkill(tag);
-        skillMap[category] = (skillMap[category] || 0) + 1;
-      });
-    });
-    quizSubmissions.forEach((sub) => {
-      sub.quiz.tags.forEach((tag) => {
-        const category = mapTagToSkill(tag);
-        skillMap[category] = (skillMap[category] || 0) + (sub.passed ? 2 : 1);
-      });
+    tagDistribution.forEach((tag) => {
+      const category = mapTagToSkill(tag.name);
+      skillMap[category] = (skillMap[category] || 0) + tag.value;
     });
     const maxSkill = Math.max(...Object.values(skillMap), 1);
     const skillRadar = Object.entries(skillMap)
       .map(([skill, value]) => ({ skill, value: Math.round((value / maxSkill) * 100) }))
+      .filter((s) => s.skill !== "其他")
       .sort((a, b) => b.value - a.value)
       .slice(0, 8);
 
@@ -350,7 +355,7 @@ export async function GET() {
         recentSubmissions,
       },
       trends: { dailyTrend },
-      distributions: { tagDistribution, skillRadar },
+      distributions: { tagDistribution, userTagDistribution, skillRadar },
       heatmap: heatmapData,
       topPosts: topPostsFormatted,
       recentFollowers: recentFollowers.map((f) => ({
@@ -391,14 +396,94 @@ function generateDailyTrend(
 function mapTagToSkill(tag: string): string {
   const lower = tag.toLowerCase();
   const mapping: Record<string, string[]> = {
-    前端: ["javascript","typescript","react","vue","next","css","html","tailwind","前端","nextjs","angular","svelte"],
-    后端: ["node","java","spring","python","go","rust","后端","express","nestjs","django","flask"],
-    算法: ["算法","数据结构","leetcode","动态规划","排序","二分","递归","数组","链表","栈","队列","树","图","哈希","双指针","滑动窗口","数学"],
-    数据库: ["sql","mysql","postgresql","mongodb","redis","数据库","prisma","orm"],
-    DevOps: ["docker","k8s","kubernetes","ci","cd","linux","nginx","aws","部署","运维"],
-    AI: ["ai","机器学习","深度学习","pytorch","tensorflow","nlp","大模型","chatgpt"],
-    移动端: ["ios","android","flutter","react native","swift","kotlin","移动"],
-    工具: ["git","vscode","webpack","vite","工具","效率"],
+    前端: [
+      "javascript","typescript","react","vue","next","nextjs","css","html","tailwind",
+      "angular","svelte","solid","astro","nuxt","remix","gatsby","sass","less","scss",
+      "webpack","vite","rollup","esbuild","turbopack","postcss","styled-components",
+      "emotion","antd","element-ui","mui","bootstrap","jquery","dom","canvas","webgl",
+      "three.js","d3","echarts","svg","pwa","web","前端","小程序","微信小程序","uniapp",
+      "taro","electron","tauri","wasm","webassembly","deno","bun",
+    ],
+    后端: [
+      "node","nodejs","java","spring","springboot","python","go","golang","rust",
+      "ruby","rails","php","laravel","c#","csharp",".net","dotnet","asp.net",
+      "express","nestjs","koa","fastify","django","flask","fastapi","gin","fiber",
+      "actix","rocket","grpc","graphql","rest","restful","api","microservice",
+      "微服务","后端","serverless","lambda","中间件","消息队列","rabbitmq","kafka",
+      "rocketmq","celery","websocket","socket","tcp","udp","http","nginx","apache",
+      "tomcat","netty",
+    ],
+    算法: [
+      "算法","数据结构","leetcode","动态规划","排序","二分","递归","数组","链表",
+      "栈","队列","树","图","哈希","双指针","滑动窗口","数学","贪心","回溯",
+      "bfs","dfs","拓扑排序","并查集","线段树","字典树","trie","堆","优先队列",
+      "前缀和","差分","位运算","分治","模拟","枚举","dp","acm","刷题","笔试",
+      "面试题","algorithm","competitive",
+    ],
+    数据库: [
+      "sql","mysql","postgresql","postgres","mongodb","redis","数据库","prisma","orm",
+      "sqlite","mariadb","oracle","mssql","cassandra","dynamodb","neo4j","influxdb",
+      "elasticsearch","es","clickhouse","tidb","oceanbase","supabase","firebase",
+      "drizzle","typeorm","sequelize","mybatis","hibernate","索引","事务","分库分表",
+      "数据建模","etl",
+    ],
+    DevOps: [
+      "docker","k8s","kubernetes","ci","cd","cicd","linux","nginx","aws","azure",
+      "gcp","阿里云","腾讯云","华为云","devops","terraform","ansible","jenkins",
+      "github actions","gitlab","运维","部署","容器","镜像","helm","prometheus",
+      "grafana","监控","日志","elk","shell","bash","自动化","云原生","cloud",
+      "负载均衡","cdn","ssl","https","ssh","服务器",
+    ],
+    AI: [
+      "ai","机器学习","深度学习","pytorch","tensorflow","nlp","大模型","chatgpt",
+      "gpt","llm","bert","transformer","神经网络","cnn","rnn","lstm","gan",
+      "强化学习","计算机视觉","cv","目标检测","图像识别","语音识别","推荐系统",
+      "数据挖掘","特征工程","sklearn","pandas","numpy","jupyter","kaggle",
+      "huggingface","langchain","rag","embedding","向量数据库","pinecone",
+      "openai","claude","gemini","diffusion","stable diffusion","midjourney",
+      "人工智能","智能","模型","训练","推理","微调","finetune","lora",
+    ],
+    移动端: [
+      "ios","android","flutter","react native","swift","kotlin","移动",
+      "swiftui","jetpack compose","dart","objective-c","expo","capacitor",
+      "ionic","cordova","app","移动开发","手机","tablet","响应式",
+      "适配","hybrid","原生","native",
+    ],
+    安全: [
+      "安全","security","网络安全","渗透","xss","csrf","sql注入","加密",
+      "密码学","oauth","jwt","认证","授权","防火墙","漏洞","ctf",
+      "逆向","reverse","pwn","web安全","身份验证","https","ssl","tls",
+    ],
+    测试: [
+      "测试","test","testing","单元测试","集成测试","e2e","cypress","playwright",
+      "jest","vitest","mocha","pytest","junit","selenium","自动化测试",
+      "tdd","bdd","mock","测试用例","qa","质量",
+    ],
+    工具: [
+      "git","github","gitlab","vscode","vim","neovim","ide","编辑器",
+      "工具","效率","terminal","命令行","cli","npm","yarn","pnpm",
+      "brew","包管理","正则","regex","markdown","latex","文档",
+      "开源","open source","chrome","插件","extension","调试","debug",
+      "性能优化","重构","设计模式","架构","clean code","代码规范",
+      "eslint","prettier","lint","monorepo","turborepo",
+    ],
+    大数据: [
+      "大数据","hadoop","spark","flink","hive","hbase","数据仓库",
+      "数据湖","数据分析","bi","tableau","powerbi","superset",
+      "airflow","数据管道","pipeline","batch","streaming","实时计算",
+      "离线计算","mapreduce","zookeeper","hdfs","presto","trino","dbt",
+    ],
+    区块链: [
+      "区块链","blockchain","web3","solidity","ethereum","以太坊","比特币",
+      "bitcoin","nft","defi","智能合约","smart contract","dapp","ipfs",
+      "crypto","挖矿","共识","polygon","solana",
+    ],
+    嵌入式: [
+      "嵌入式","embedded","stm32","arduino","树莓派","raspberry","单片机",
+      "mcu","rtos","freertos","rt-thread","arm","risc-v","fpga","verilog",
+      "iot","物联网","传感器","gpio","uart","spi","i2c","pcb","硬件",
+      "固件","firmware","驱动","driver",
+    ],
   };
   for (const [skill, keywords] of Object.entries(mapping)) {
     if (keywords.some((kw) => lower.includes(kw))) return skill;
