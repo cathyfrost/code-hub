@@ -234,7 +234,7 @@ export default function MenuBarClient({
               variant="ghost"
               onClick={() => toggleGroup(group.key)}
               className={cn(
-                "flex items-center justify-start gap-3",
+                "flex w-full items-center justify-start gap-3",
                 groupActive && !isExpanded && "text-primary",
               )}
             >

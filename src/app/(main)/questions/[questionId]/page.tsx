@@ -7,6 +7,7 @@ import QuestionSidebar from "../QuestionSidebar";
 import { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
+import { ArrowLeft } from "lucide-react";
 
 const getQuestion = cache(async (questionId: string, userId: string) => {
   const post = await prisma.post.findUnique({
@@ -58,9 +59,10 @@ export default async function QuestionDetailPage({
         <div className="mb-4">
           <Link
             href="/questions"
-            className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+            className="group inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
           >
-            ← 返回问答广场
+            <ArrowLeft className="size-3.5 transition-transform duration-200 group-hover:-translate-x-1" />
+            返回问答广场
           </Link>
         </div>
         {/* SO 风格：直接平铺内容，不包裹卡片 */}
