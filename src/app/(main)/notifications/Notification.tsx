@@ -20,14 +20,22 @@ export default function Notification({ notification }: NotificationProps) {
       href: `/users/${notification.issuer.username}`,
     },
     COMMENT: {
-      message: `${notification.issuer.displayName} 评论了你的帖子`,
+      message: notification.comment?.parent
+        ? `${notification.issuer.displayName} 回复了你的评论`
+        : `${notification.issuer.displayName} 评论了你的帖子`,
       icon: <MessageCircle className="size-7 fill-primary text-primary" />,
-      href: `/posts/${notification.postId}`,
+      href: notification.post?.isQuestion
+        ? `/questions/${notification.postId}`
+        : `/posts/${notification.postId}`,
     },
     LIKE: {
-      message: `${notification.issuer.displayName} 给你的帖子点赞了`,
+      message: notification.commentId
+        ? `${notification.issuer.displayName} 赞了你的评论`
+        : `${notification.issuer.displayName} 给你的帖子点赞了`,
       icon: <Heart className="size-7 fill-red-500 text-red-500" />,
-      href: `/posts/${notification.postId}`,
+      href: notification.post?.isQuestion
+        ? `/questions/${notification.postId}`
+        : `/posts/${notification.postId}`,
     },
     BOUNTY_ACCEPTED: {
       message: `${notification.issuer.displayName} 采纳了你的回答`,
@@ -54,10 +62,23 @@ export default function Notification({ notification }: NotificationProps) {
             <span>{message}</span>
           </div>
           {notification.comment && (
-            <div className="rounded-2xl bg-muted/50 px-4 py-2.5 text-sm">
-              <p className="line-clamp-3 whitespace-pre-line">
-                {notification.comment.content}
-              </p>
+            <div className="space-y-2">
+              <div className="rounded-2xl bg-muted/50 px-4 py-2.5 text-sm">
+                <p className="line-clamp-3 whitespace-pre-line">
+                  {notification.comment.content}
+                </p>
+              </div>
+              {notification.comment.parent && (
+                <div className="border-l-2 border-muted-foreground/20 pl-3 text-xs text-muted-foreground">
+                  <span className="font-medium">
+                    {notification.comment.parent.user?.displayName}
+                  </span>
+                  {" 的原评论："}
+                  <p className="mt-0.5 line-clamp-2 whitespace-pre-line">
+                    {notification.comment.parent.content}
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {notification.post && (

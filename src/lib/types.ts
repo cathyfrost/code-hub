@@ -157,11 +157,22 @@ export const notificationsInclude = {
   post: {
     select: {
       content: true,
+      isQuestion: true,
     },
   },
   comment: {
     select: {
       content: true,
+      parent: {
+        select: {
+          content: true,
+          user: {
+            select: {
+              displayName: true,
+            },
+          },
+        },
+      },
     },
   },
 } satisfies Prisma.NotificationInclude;

@@ -9,6 +9,7 @@ import { useSession } from "@/app/(main)/SessionProvider";
 import CommentMoreButton from "./CommentMoreButton";
 import CommentLikeButton from "./CommentLikeButton";
 import CommentInput from "./CommentInput";
+import AnswerMarkdown from "@/app/(main)/questions/[questionId]/AnswerMarkdown";
 import { useState } from "react";
 import { MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -58,8 +59,8 @@ export default function Comment({ comment, post, depth = 0 }: CommentProps) {
             </span>
           </div>
 
-          <div className="mt-0.5 break-words text-[14px] leading-relaxed text-foreground/90">
-            {comment.content}
+          <div className="mt-0.5 text-[14px] leading-relaxed">
+            <AnswerMarkdown content={comment.content} />
           </div>
 
           <div className="mt-1 flex items-center gap-1">
@@ -86,7 +87,7 @@ export default function Comment({ comment, post, depth = 0 }: CommentProps) {
             <div className="mt-2">
               <CommentInput
                 post={post}
-                parentId={comment.parentId || comment.id}
+                parentId={comment.id}
                 replyToName={comment.user.username}
                 replyToDisplayName={comment.user.displayName}
                 onCancelReply={() => setShowReplyInput(false)}

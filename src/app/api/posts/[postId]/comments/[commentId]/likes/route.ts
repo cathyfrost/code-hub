@@ -49,26 +49,50 @@ export async function POST(
   { params }: { params: Promise<{ postId: string; commentId: string }> },
 ) {
   try {
-    const { commentId } = await params;
+    const { postId, commentId } = await params;
     const { user } = await validateRequest();
 
     if (!user) {
       return Response.json({ error: "未授权" }, { status: 401 });
     }
 
-    await prisma.commentLike.upsert({
-      where: {
-        userId_commentId: {
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { userId: true },
+    });
+
+    if (!comment) {
+      return Response.json({ error: "评论不存在" }, { status: 404 });
+    }
+
+    await prisma.$transaction([
+      prisma.commentLike.upsert({
+        where: {
+          userId_commentId: {
+            userId: user.id,
+            commentId,
+          },
+        },
+        create: {
           userId: user.id,
           commentId,
         },
-      },
-      create: {
-        userId: user.id,
-        commentId,
-      },
-      update: {},
-    });
+        update: {},
+      }),
+      ...(user.id !== comment.userId
+        ? [
+            prisma.notification.create({
+              data: {
+                issuerId: user.id,
+                recipientId: comment.userId,
+                postId,
+                commentId,
+                type: "LIKE",
+              },
+            }),
+          ]
+        : []),
+    ]);
 
     return new Response();
   } catch (error) {
@@ -82,19 +106,39 @@ export async function DELETE(
   { params }: { params: Promise<{ postId: string; commentId: string }> },
 ) {
   try {
-    const { commentId } = await params;
+    const { postId, commentId } = await params;
     const { user } = await validateRequest();
 
     if (!user) {
       return Response.json({ error: "未授权" }, { status: 401 });
     }
 
-    await prisma.commentLike.deleteMany({
-      where: {
-        userId: user.id,
-        commentId,
-      },
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+      select: { userId: true },
     });
+
+    if (!comment) {
+      return Response.json({ error: "评论不存在" }, { status: 404 });
+    }
+
+    await prisma.$transaction([
+      prisma.commentLike.deleteMany({
+        where: {
+          userId: user.id,
+          commentId,
+        },
+      }),
+      prisma.notification.deleteMany({
+        where: {
+          issuerId: user.id,
+          recipientId: comment.userId,
+          postId,
+          commentId,
+          type: "LIKE",
+        },
+      }),
+    ]);
 
     return new Response();
   } catch (error) {

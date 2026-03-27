@@ -38,6 +38,7 @@ export async function submitComment({
       include: getCommentDataInclude(user.id),
     });
 
+    // 通知帖子作者
     if (post.user.id !== user.id) {
       await tx.notification.create({
         data: {
@@ -48,6 +49,29 @@ export async function submitComment({
           type: "COMMENT",
         },
       });
+    }
+
+    // 如果是回复，额外通知被回复的评论作者
+    if (parentId) {
+      const parentComment = await tx.comment.findUnique({
+        where: { id: parentId },
+        select: { userId: true },
+      });
+      if (
+        parentComment &&
+        parentComment.userId !== user.id &&
+        parentComment.userId !== post.user.id
+      ) {
+        await tx.notification.create({
+          data: {
+            issuerId: user.id,
+            recipientId: parentComment.userId,
+            postId: post.id,
+            commentId: comment.id,
+            type: "COMMENT",
+          },
+        });
+      }
     }
 
     return [comment];

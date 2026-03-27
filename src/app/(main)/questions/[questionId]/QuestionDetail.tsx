@@ -5,12 +5,10 @@ import { useSession } from "@/app/(main)/SessionProvider";
 import { formatRelativeDate } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import Link from "next/link";
-import Linkify from "@/components/Linkify";
 import {
   Coins,
   CheckCircle2,
   Loader2,
-  Copy,
   ChevronDown,
   Bell,
   MoreHorizontal,
@@ -20,10 +18,12 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import kyInstance from "@/lib/ky";
 import CommentInput from "@/components/comments/CommentInput";
 import AnswerCard from "./AnswerCard";
+import AnswerMarkdown from "./AnswerMarkdown";
 import QuestionVoteButton from "./QuestionVoteButton";
 import { useDeleteQuestionMutation } from "../mutations";
 import { useToast } from "@/components/ui/use-toast";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { LevelBadge } from "./UserBadges";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,55 +37,6 @@ import {
 
 interface QuestionDetailProps {
   post: PostData;
-}
-
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [code]);
-
-  return (
-    <div className="group relative my-3 rounded-md border bg-[#f6f8fa] dark:border-border dark:bg-[#1e1e1e]">
-      <div className="flex items-center justify-between border-b px-4 py-1.5 text-[12px] text-muted-foreground">
-        <span>{language.toUpperCase() || "CODE"}</span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1 transition-colors hover:text-foreground"
-        >
-          <Copy className="size-3.5" />
-          {copied ? "已复制" : "复制"}
-        </button>
-      </div>
-      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
-
-function renderContent(content: string) {
-  const parts = content.split(/(```\w*\n[\s\S]*?```)/);
-  return parts.map((part, i) => {
-    const codeMatch = part.match(/^```(\w*)\n([\s\S]*?)```$/);
-    if (codeMatch) {
-      return (
-        <CodeBlock
-          key={i}
-          language={codeMatch[1] || "text"}
-          code={codeMatch[2].trimEnd()}
-        />
-      );
-    }
-    return part.trim() ? (
-      <span key={i} className="whitespace-pre-line break-words">
-        {part}
-      </span>
-    ) : null;
-  });
 }
 
 function parseQuestionContent(content: string) {
@@ -133,7 +84,6 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
   const { title, tags, body } = parseQuestionContent(post.content);
   const isAuthor = post.userId === user.id;
 
-  // 打开详情页时自增查看次数
   useEffect(() => {
     fetch(`/api/posts/${post.id}/view`, { method: "POST" });
   }, [post.id]);
@@ -187,7 +137,7 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
         {/* ══════════ 问题头部 ══════════ */}
         <div className="border-b pb-4">
           <div className="mb-2 flex items-center justify-between">
-            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
               <Link href={`/users/${post.user.username}`}>
                 <UserAvatar avatarUrl={post.user.avatarUrl} size={24} />
               </Link>
@@ -197,6 +147,7 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
               >
                 {post.user.displayName}
               </Link>
+              <LevelBadge level={post.user.skillLevel || 1} />
               <span className="text-muted-foreground">·</span>
               <span className="text-muted-foreground" suppressHydrationWarning>
                 提问于 {formatRelativeDate(post.createAt)}
@@ -281,13 +232,9 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
           </div>
         </div>
 
-        {/* ══════════ 正文 ══════════ */}
+        {/* ══════════ 正文 — Markdown 渲染 ══════════ */}
         <div className="border-b py-5">
-          <Linkify>
-            <div className="space-y-3 text-[15px] leading-[1.8] text-foreground/90">
-              {renderContent(body)}
-            </div>
-          </Linkify>
+          <AnswerMarkdown content={body} />
 
           <div className="mt-6 flex items-end justify-between">
             <div className="flex items-center gap-4">
@@ -442,7 +389,6 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
         </div>
       </div>
 
-      {/* 删除确认弹窗 */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
