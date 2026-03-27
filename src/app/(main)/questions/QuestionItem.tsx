@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 
 interface QuestionItemProps {
   post: PostData;
-  onTagClick?: (tag: string) => void;
 }
 
 export default function QuestionItem({ post }: QuestionItemProps) {
@@ -42,42 +41,73 @@ export default function QuestionItem({ post }: QuestionItemProps) {
   const hasAnswers = post._count.comments > 0;
 
   return (
-    <div className="flex gap-4 border-b px-5 py-4 last:border-b-0">
-      {/* 左侧统计列 */}
+    <div className="flex gap-4 border-b px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/20">
+      {/* ── 左侧统计列 ── */}
       <div className="flex w-[4.5rem] shrink-0 flex-col items-end gap-1 pt-0.5 text-[13px]">
-        <span className="text-muted-foreground">
+        {/* 票数 */}
+        <div className="flex h-[26px] items-center gap-0.5 rounded-[4px] border border-transparent px-1.5 transition-colors hover:border-border hover:bg-muted/40">
           <strong className="font-semibold text-foreground/80">
             {post._count.likes}
-          </strong>{" "}
-          票
-        </span>
-        <span
+          </strong>
+          <span className="text-muted-foreground"> 票</span>
+        </div>
+
+        {/* 回答数 */}
+        <div
           className={cn(
-            "rounded-sm px-1.5 py-0.5 text-right",
+            "flex h-[26px] items-center gap-0.5 rounded-[4px] px-1.5 transition-colors",
             hasAcceptedAnswer &&
-              "bg-green-600 font-medium text-white dark:bg-green-700",
+              "bg-green-600 hover:bg-green-600/90 dark:bg-green-700",
             !hasAcceptedAnswer &&
               hasAnswers &&
-              "border border-green-600 font-medium text-green-600 dark:border-green-500 dark:text-green-400",
-            !hasAcceptedAnswer && !hasAnswers && "text-muted-foreground",
+              "border border-green-600/50 hover:border-green-600 dark:border-green-500/50",
+            !hasAcceptedAnswer &&
+              !hasAnswers &&
+              "border border-transparent hover:border-border hover:bg-muted/40",
           )}
         >
           {hasAcceptedAnswer && (
-            <CheckCircle2 className="mr-0.5 inline size-[13px] align-[-2px]" />
+            <CheckCircle2 className="mr-0.5 size-[13px] text-white/80" />
           )}
-          {post._count.comments} 回答
-        </span>
-        <span className="text-muted-foreground">
-          {post.viewCount >= 1000
-            ? `${(post.viewCount / 1000).toFixed(post.viewCount >= 10000 ? 0 : 1)}k`
-            : post.viewCount}{" "}
-          浏览
-        </span>
+          <strong
+            className={cn(
+              "font-semibold",
+              hasAcceptedAnswer && "text-white",
+              !hasAcceptedAnswer &&
+                hasAnswers &&
+                "text-green-600 dark:text-green-400",
+              !hasAcceptedAnswer && !hasAnswers && "text-foreground/80",
+            )}
+          >
+            {post._count.comments}
+          </strong>
+          <span
+            className={cn(
+              hasAcceptedAnswer && "text-white/80",
+              !hasAcceptedAnswer &&
+                hasAnswers &&
+                "text-green-600/70 dark:text-green-400/70",
+              !hasAcceptedAnswer && !hasAnswers && "text-muted-foreground",
+            )}
+          >
+            {" "}回答
+          </span>
+        </div>
+
+        {/* 浏览数 */}
+        <div className="flex h-[26px] items-center gap-0.5 rounded-[4px] border border-transparent px-1.5 transition-colors hover:border-border hover:bg-muted/40">
+          <strong className="font-semibold text-foreground/80">
+            {post.viewCount >= 1000
+              ? `${(post.viewCount / 1000).toFixed(post.viewCount >= 10000 ? 0 : 1)}k`
+              : post.viewCount}
+          </strong>
+          <span className="text-muted-foreground"> 浏览</span>
+        </div>
       </div>
 
-      {/* 右侧内容 */}
+      {/* ── 右侧内容 ── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 标题 + 状态标签（同一行） */}
+        {/* 标题 + 状态标签 */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
             href={`/questions/${post.id}`}
@@ -107,7 +137,6 @@ export default function QuestionItem({ post }: QuestionItemProps) {
 
         {/* 标签 + 用户信息 */}
         <div className="mt-auto flex flex-wrap items-center justify-between gap-y-1.5 pt-2">
-          {/* 可点击标签 */}
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
               <span
@@ -119,7 +148,6 @@ export default function QuestionItem({ post }: QuestionItemProps) {
             ))}
           </div>
 
-          {/* 用户信息（右下角） */}
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Link
               href={`/users/${post.user.username}`}

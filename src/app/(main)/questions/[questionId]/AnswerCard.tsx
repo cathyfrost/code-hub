@@ -137,7 +137,8 @@ export default function AnswerCard({
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
-                className="rounded-full p-0.5 text-muted-foreground/30 transition-colors hover:text-green-500"
+                disabled={acceptMutation.isPending}
+                className="rounded-full p-0.5 text-muted-foreground/30 transition-colors hover:text-green-500 disabled:pointer-events-none disabled:opacity-30"
                 title="采纳此回答"
               >
                 <CheckCircle2 className="size-5" strokeWidth={2} />
@@ -159,9 +160,10 @@ export default function AnswerCard({
                       commentId: comment.id,
                     })
                   }
-                  className="bg-green-600 hover:bg-green-700"
+                  disabled={acceptMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
                 >
-                  确认采纳
+                  {acceptMutation.isPending ? "处理中..." : "确认采纳"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

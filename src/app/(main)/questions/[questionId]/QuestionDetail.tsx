@@ -394,7 +394,7 @@ export default function QuestionDetail({ post }: QuestionDetailProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>删除此问题？</AlertDialogTitle>
             <AlertDialogDescription>
-              {`确定要删除这条问题吗？此操作无法撤销。${!post.isResolved && post.bounty > 0 ? `悬赏的 ${post.bounty} 积分将退还到你的账户。` : ""}`}
+              {`确定要删除这条问题吗？此操作无法撤销。${!post.isResolved && post.bounty > 0 ? `悬赏的 ${post.bounty} 积分将退还到你的账户。` : post.isResolved && post.bounty > 0 ? `该问题已解决，悬赏的 ${post.bounty} 积分已转给回答者，不会退还。` : ""}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -77,74 +77,85 @@ export async function acceptAnswer(postId: string, commentId: string) {
   const { user } = await validateRequest();
   if (!user) throw Error("未授权");
 
-  const result = await prisma.$transaction(async (tx) => {
-    const post = await tx.post.findUnique({
-      where: { id: postId },
-      select: {
-        userId: true,
-        isQuestion: true,
-        isResolved: true,
-        bounty: true,
-      },
-    });
-
-    if (!post) throw new Error("帖子不存在");
-    if (!post.isQuestion) throw new Error("该帖子不是提问帖");
-    if (post.isResolved) throw new Error("该问题已有最佳答案");
-    if (post.userId !== user.id) throw new Error("只有题主可以采纳答案");
-
-    const comment = await tx.comment.findUnique({
-      where: { id: commentId },
-      select: { userId: true, postId: true },
-    });
-
-    if (!comment) throw new Error("评论不存在");
-    if (comment.postId !== postId) throw new Error("该评论不属于此帖子");
-    if (comment.userId === user.id) throw new Error("不能采纳自己的回答");
-
-    // 更新帖子状态
-    const updatedPost = await tx.post.update({
-      where: { id: postId },
-      data: {
-        isResolved: true,
-        acceptedCommentId: commentId,
-      },
-      include: getPostDataInclude(user.id),
-    });
-
-    // 转移悬赏积分
-    if (post.bounty > 0) {
-      await tx.user.update({
-        where: { id: comment.userId },
-        data: { points: { increment: post.bounty } },
-      });
-
-      await tx.pointTransaction.create({
-        data: {
-          userId: comment.userId,
-          amount: post.bounty,
-          type: "BOUNTY_EARNED",
-          postId,
-          detail: `回答被采纳，获得 ${post.bounty} 积分`,
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: {
+          userId: true,
+          isQuestion: true,
+          isResolved: true,
+          bounty: true,
         },
       });
-    }
 
-    // 发送通知
-    await tx.notification.create({
-      data: {
-        issuerId: user.id,
-        recipientId: comment.userId,
-        postId,
-        commentId,
-        type: "BOUNTY_ACCEPTED",
-      },
+      if (!post) throw new Error("帖子不存在");
+      if (!post.isQuestion) throw new Error("该帖子不是提问帖");
+      if (post.isResolved) throw new Error("该问题已有最佳答案");
+      if (post.userId !== user.id) throw new Error("只有题主可以采纳答案");
+
+      const comment = await tx.comment.findUnique({
+        where: { id: commentId },
+        select: { userId: true, postId: true },
+      });
+
+      if (!comment) throw new Error("评论不存在");
+      if (comment.postId !== postId) throw new Error("该评论不属于此帖子");
+      if (comment.userId === user.id) throw new Error("不能采纳自己的回答");
+
+      // 更新帖子状态
+      const updatedPost = await tx.post.update({
+        where: { id: postId },
+        data: {
+          isResolved: true,
+          acceptedCommentId: commentId,
+        },
+        include: getPostDataInclude(user.id),
+      });
+
+      // 转移悬赏积分
+      if (post.bounty > 0) {
+        await tx.user.update({
+          where: { id: comment.userId },
+          data: { points: { increment: post.bounty } },
+        });
+
+        await tx.pointTransaction.create({
+          data: {
+            userId: comment.userId,
+            amount: post.bounty,
+            type: "BOUNTY_EARNED",
+            postId,
+            detail: `回答被采纳，获得 ${post.bounty} 积分`,
+          },
+        });
+      }
+
+      // 发送通知
+      await tx.notification.create({
+        data: {
+          issuerId: user.id,
+          recipientId: comment.userId,
+          postId,
+          commentId,
+          type: "BOUNTY_ACCEPTED",
+        },
+      });
+
+      return updatedPost;
     });
 
-    return updatedPost;
-  });
-
-  return result;
+    return result;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("Unique constraint") ||
+        error.message.includes("已有最佳答案"))
+    ) {
+      throw new Error("该问题已有最佳答案");
+    }
+    throw error;
+  }
 }
 
 export async function deleteQuestion(id: string) {

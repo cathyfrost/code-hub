@@ -73,6 +73,7 @@ export function useSubmitQuestionMutation() {
 export function useAcceptAnswerMutation() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const mutation = useMutation({
     mutationFn: ({
@@ -85,6 +86,7 @@ export function useAcceptAnswerMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["post-feed"] });
       await queryClient.invalidateQueries({ queryKey: ["answers"] });
+      router.refresh();
 
       toast({
         description: "已采纳最佳答案，积分已转给回答者 ✅",
@@ -112,7 +114,7 @@ export function useDeleteQuestionMutation() {
       import("./actions").then((m) => m.deleteQuestion(id)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["post-feed"] });
-      toast({ description: "问题已删除，悬赏积分已退还" });
+      toast({ description: "问题已删除" });
       router.push("/questions");
     },
     onError(error) {
