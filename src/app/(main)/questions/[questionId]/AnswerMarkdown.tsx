@@ -45,7 +45,7 @@ function renderMath(src: string): string {
   return src;
 }
 
-// ── markdown-it 实例（代码块输出占位符，后续用 React 组件替换）──
+// ── markdown-it 实例 ──
 const PLACEHOLDER_PREFIX = "___CODEBLOCK_";
 
 const md = new MarkdownIt({
@@ -54,7 +54,6 @@ const md = new MarkdownIt({
   typographer: true,
   breaks: true,
   highlight: function (str, lang) {
-    // 输出一个带特殊标记的占位 div，后续会被拆分成 React 组件
     const escaped = str
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -77,7 +76,6 @@ function InteractiveCodeBlock({ language, code }: { language: string; code: stri
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  // 异步高亮
   useEffect(() => {
     const normalizedLang = normalizeLang(language.toLowerCase());
     if (SUPPORTED_LANGS.has(language.toLowerCase()) || SUPPORTED_LANGS.has(normalizedLang)) {
@@ -92,7 +90,6 @@ function InteractiveCodeBlock({ language, code }: { language: string; code: stri
 
   return (
     <div className="qa-code-interactive group relative my-3 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
-      {/* 顶栏：语言 + 行数 + 展开/收起 + 复制 */}
       <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-1.5 text-[12px] text-[hsl(var(--muted-foreground))]">
         <span className="font-semibold uppercase tracking-wider">
           {language.toUpperCase()}{" "}
@@ -136,12 +133,10 @@ function InteractiveCodeBlock({ language, code }: { language: string; code: stri
         </div>
       </div>
 
-      {/* 代码内容 */}
       <div className="relative">
         <div
           className={cn(
             "overflow-hidden transition-all duration-300",
-            !expanded && `max-h-[${CODE_COLLAPSE_THRESHOLD * 1.65 * 13 + 32}px]`,
           )}
           style={!expanded ? { maxHeight: CODE_COLLAPSE_THRESHOLD * 1.65 * 13 + 32 } : undefined}
         >
@@ -157,7 +152,6 @@ function InteractiveCodeBlock({ language, code }: { language: string; code: stri
           )}
         </div>
 
-        {/* 渐变遮罩 + 点击展开 */}
         {!expanded && shouldCollapse && (
           <div
             onClick={() => setExpanded(true)}
@@ -191,9 +185,15 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
     }
 
     const withMath = renderMath(content);
-    const rendered = md.render(withMath);
+    let rendered = md.render(withMath);
 
-    // 用占位符拆分 HTML：交替排列 [html, codeBlock, html, codeBlock, ...]
+    // #标签 高亮（排除 HTML 属性、URL 中的 #，以及代码占位符中的 #）
+    rendered = rendered.replace(
+      /(?<!["\/\w])#([^\s#<>{};()&]+)/g,
+      '<a href="/hashtag/$1" class="qa-hashtag">#$1</a>',
+    );
+
+    // 用占位符拆分 HTML
     const placeholderRegex = new RegExp(
       `${PLACEHOLDER_PREFIX}(.*?)${PLACEHOLDER_PREFIX}([\\s\\S]*?)${PLACEHOLDER_PREFIX}END${PLACEHOLDER_PREFIX}`,
       "g",
@@ -205,9 +205,7 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
 
     let match;
     while ((match = placeholderRegex.exec(rendered)) !== null) {
-      // match 前面的 HTML
       htmlParts.push(rendered.slice(lastIndex, match.index));
-      // 代码块
       const lang = match[1] || "text";
       const code = match[2]
         .replace(/&amp;/g, "&")
@@ -216,7 +214,6 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
       blocks.push({ lang, code });
       lastIndex = match.index + match[0].length;
     }
-    // 最后一段 HTML
     htmlParts.push(rendered.slice(lastIndex));
 
     setNonCodeHtmlParts(htmlParts);
@@ -225,7 +222,6 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
 
   if (!content) return null;
 
-  // 交替渲染：HTML 部分 + React 代码块组件
   const elements: React.ReactNode[] = [];
   for (let i = 0; i < nonCodeHtmlParts.length; i++) {
     if (nonCodeHtmlParts[i]) {
@@ -268,6 +264,14 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
         .qa-markdown em { font-style: italic; }
         .qa-markdown a { color: hsl(var(--primary)); text-decoration: none; }
         .qa-markdown a:hover { text-decoration: underline; }
+        .qa-markdown .qa-hashtag {
+          color: hsl(var(--primary));
+          font-weight: 500;
+          text-decoration: none;
+        }
+        .qa-markdown .qa-hashtag:hover {
+          text-decoration: underline;
+        }
         .qa-markdown code:not(pre code) {
           background: hsl(var(--muted)); color: hsl(var(--primary));
           padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em;
