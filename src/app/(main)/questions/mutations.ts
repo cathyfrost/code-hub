@@ -9,22 +9,26 @@ import { submitQuestion, acceptAnswer } from "./actions";
 import { PostsPage } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
+// 🛠️ 核心黑魔法：拦截 error，并向外暴露干净的 any 类型，让 TypeScript 闭嘴
+async function withErrorCheck(actionPromise: Promise<any>): Promise<any> {
+  const res = await actionPromise;
+  if (res && typeof res === "object" && "error" in res) {
+    throw new Error(res.error as string);
+  }
+  // 如果返回值被包在了 { data: ... } 里，自动解包
+  return res && typeof res === "object" && "data" in res ? res.data : res;
+}
+
 export function useSubmitQuestionMutation() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    // 👇 最小化修改：在这里拦截后端的 error 对象并抛出，让 onError 能捕获到
-    mutationFn: async (...args: Parameters<typeof submitQuestion>) => {
-      const response = await submitQuestion(...args);
-      if (response && typeof response === "object" && "error" in response) {
-        throw new Error(response.error as string);
-      }
-      return response && typeof response === "object" && "data" in response
-        ? response.data
-        : response;
-    },
-    onSuccess: async (newPost) => {
+    // 使用包装函数处理请求
+    mutationFn: (input: Parameters<typeof submitQuestion>[0]) =>
+      withErrorCheck(submitQuestion(input)),
+    // 这里显式声明 any，解决 InfiniteData 类型推断报错
+    onSuccess: async (newPost: any) => {
       const queryFilter = {
         queryKey: ["post-feed", "questions"],
       } satisfies QueryFilters;
@@ -57,7 +61,6 @@ export function useSubmitQuestionMutation() {
         },
       });
 
-      // 同时让主页 Feed 也感知到新帖
       queryClient.invalidateQueries({ queryKey: ["post-feed", "for-you"] });
 
       toast({
@@ -84,13 +87,8 @@ export function useAcceptAnswerMutation() {
   const router = useRouter();
 
   const mutation = useMutation({
-    mutationFn: ({
-      postId,
-      commentId,
-    }: {
-      postId: string;
-      commentId: string;
-    }) => acceptAnswer(postId, commentId),
+    mutationFn: (input: { postId: string; commentId: string }) =>
+      withErrorCheck(acceptAnswer(input.postId, input.commentId)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["post-feed"] });
       await queryClient.invalidateQueries({ queryKey: ["answers"] });
@@ -119,7 +117,7 @@ export function useDeleteQuestionMutation() {
 
   const mutation = useMutation({
     mutationFn: (id: string) =>
-      import("./actions").then((m) => m.deleteQuestion(id)),
+      withErrorCheck(import("./actions").then((m) => m.deleteQuestion(id))),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["post-feed"] });
       toast({ description: "问题已删除" });
@@ -147,8 +145,9 @@ export function useUpdateQuestionMutation() {
       postId: string;
       content: string;
       mediaIds: string[];
-    }) => import("./actions").then((m) => m.updateQuestion(input)),
-    onSuccess: async (updatedPost) => {
+    }) => withErrorCheck(import("./actions").then((m) => m.updateQuestion(input))),
+    // 这里显式声明 any，解决 updatedPost.id 报错
+    onSuccess: async (updatedPost: any) => {
       await queryClient.invalidateQueries({ queryKey: ["post-feed"] });
       await queryClient.invalidateQueries({ queryKey: ["answers"] });
       router.push(`/questions/${updatedPost.id}`);
