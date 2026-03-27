@@ -25,6 +25,7 @@ import LikeButton from "./LikeButton";
 import BookmarkButton from "./BookmarkButton";
 import Comments from "../comments/Comments";
 import AnswerMarkdown from "@/app/(main)/questions/[questionId]/AnswerMarkdown";
+import "katex/dist/katex.min.css";
 
 interface PostProps {
   post: PostData;
@@ -118,7 +119,24 @@ function AIAnalyzeButton({
             <Sparkles className="size-3" />
             AI 概述
           </div>
-          <div className="whitespace-pre-line">{result}</div>
+          <div
+  className="whitespace-pre-line"
+  dangerouslySetInnerHTML={{
+    __html: (result || "")
+      .replace(/\$\$\n?([\s\S]*?)\n?\$\$/g, (_, math) => {
+        try {
+          const katex = require("katex");
+          return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+        } catch { return `<pre>${math}</pre>`; }
+      })
+      .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_, math) => {
+        try {
+          const katex = require("katex");
+          return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+        } catch { return `<code>${math}</code>`; }
+      })
+  }}
+/>
         </div>
       )}
     </div>
