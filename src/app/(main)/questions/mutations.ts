@@ -14,7 +14,16 @@ export function useSubmitQuestionMutation() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: submitQuestion,
+    // 👇 最小化修改：在这里拦截后端的 error 对象并抛出，让 onError 能捕获到
+    mutationFn: async (...args: Parameters<typeof submitQuestion>) => {
+      const response = await submitQuestion(...args);
+      if (response && typeof response === "object" && "error" in response) {
+        throw new Error(response.error as string);
+      }
+      return response && typeof response === "object" && "data" in response
+        ? response.data
+        : response;
+    },
     onSuccess: async (newPost) => {
       const queryFilter = {
         queryKey: ["post-feed", "questions"],
@@ -59,10 +68,9 @@ export function useSubmitQuestionMutation() {
       console.error(error);
       toast({
         variant: "destructive",
-        description:
-          error.message === "积分不足，无法发布悬赏"
-            ? "积分不足，请降低悬赏金额"
-            : "发布失败，再试一次吧 😅",
+        description: error.message?.includes("积分不足")
+          ? "积分不足，请降低悬赏金额"
+          : "发布失败，再试一次吧 😅",
       });
     },
   });

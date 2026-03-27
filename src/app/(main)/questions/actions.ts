@@ -11,7 +11,7 @@ export async function submitQuestion(input: {
   bounty: number;
 }) {
   const { user } = await validateRequest();
-  if (!user) throw Error("未授权");
+  if (!user) return { error: "未授权" };
 
   const { content, mediaIds, bounty } = createQuestionSchema.parse(input);
 
@@ -24,7 +24,7 @@ export async function submitQuestion(input: {
       });
 
       if (!currentUser || currentUser.points < bounty) {
-        throw new Error("积分不足，无法发布悬赏");
+        return { error: "积分不足，无法发布悬赏" };
       }
 
       await tx.user.update({
@@ -75,7 +75,7 @@ export async function submitQuestion(input: {
 
 export async function acceptAnswer(postId: string, commentId: string) {
   const { user } = await validateRequest();
-  if (!user) throw Error("未授权");
+  if (!user) return { error: "未授权" };
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -89,19 +89,19 @@ export async function acceptAnswer(postId: string, commentId: string) {
         },
       });
 
-      if (!post) throw new Error("帖子不存在");
-      if (!post.isQuestion) throw new Error("该帖子不是提问帖");
-      if (post.isResolved) throw new Error("该问题已有最佳答案");
-      if (post.userId !== user.id) throw new Error("只有题主可以采纳答案");
+      if (!post) return { error: "帖子不存在" };
+      if (!post.isQuestion) return { error: "该帖子不是提问帖" };
+      if (post.isResolved) return { error: "该问题已有最佳答案" };
+      if (post.userId !== user.id) return { error: "只有题主可以采纳答案" };
 
       const comment = await tx.comment.findUnique({
         where: { id: commentId },
         select: { userId: true, postId: true },
       });
 
-      if (!comment) throw new Error("评论不存在");
-      if (comment.postId !== postId) throw new Error("该评论不属于此帖子");
-      if (comment.userId === user.id) throw new Error("不能采纳自己的回答");
+      if (!comment) return { error: "评论不存在" };
+      if (comment.postId !== postId) return { error: "该评论不属于此帖子" };
+      if (comment.userId === user.id) return { error: "不能采纳自己的回答" };
 
       // 更新帖子状态
       const updatedPost = await tx.post.update({
@@ -152,15 +152,15 @@ export async function acceptAnswer(postId: string, commentId: string) {
       (error.message.includes("Unique constraint") ||
         error.message.includes("已有最佳答案"))
     ) {
-      throw new Error("该问题已有最佳答案");
+      return { error: "该问题已有最佳答案" };
     }
-    throw error;
+    return { error: "操作失败，请重试" };
   }
 }
 
 export async function deleteQuestion(id: string) {
   const { user } = await validateRequest();
-  if (!user) throw Error("未授权");
+  if (!user) return { error: "未授权" };
 
   const post = await prisma.post.findUnique({
     where: { id },
@@ -172,9 +172,9 @@ export async function deleteQuestion(id: string) {
     },
   });
 
-  if (!post) throw new Error("帖子不存在");
-  if (post.userId !== user.id) throw new Error("未授权");
-  if (!post.isQuestion) throw new Error("该帖子不是问答帖");
+  if (!post) return { error: "帖子不存在" };
+  if (post.userId !== user.id) return { error: "未授权" };
+  if (!post.isQuestion) return { error: "该帖子不是问答帖" };
 
   await prisma.$transaction(async (tx) => {
     // 未解决且有悬赏：退还积分
@@ -197,6 +197,8 @@ export async function deleteQuestion(id: string) {
 
     await tx.post.delete({ where: { id } });
   });
+
+  return { success: true };
 }
 
 export async function updateQuestion(input: {
@@ -205,16 +207,16 @@ export async function updateQuestion(input: {
   mediaIds: string[];
 }) {
   const { user } = await validateRequest();
-  if (!user) throw Error("未授权");
+  if (!user) return { error: "未授权" };
 
   const post = await prisma.post.findUnique({
     where: { id: input.postId },
     select: { userId: true, isQuestion: true },
   });
 
-  if (!post) throw new Error("帖子不存在");
-  if (post.userId !== user.id) throw new Error("未授权");
-  if (!post.isQuestion) throw new Error("该帖子不是问答帖");
+  if (!post) return { error: "帖子不存在" };
+  if (post.userId !== user.id) return { error: "未授权" };
+  if (!post.isQuestion) return { error: "该帖子不是问答帖" };
 
   const updatedPost = await prisma.post.update({
     where: { id: input.postId },
