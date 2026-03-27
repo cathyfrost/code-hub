@@ -36,3 +36,9 @@ export type UpdateUserProfileValues = z.infer<typeof updateUserProfileSchema>;
 export const createCommentSchema = z.object({
     content: requiredString
 })
+
+export const createQuestionSchema = z.object({
+    content: requiredString,
+    mediaIds: z.array(z.string()).max(5, "附件数量不能超过5个"),
+    bounty: z.number().int().min(0, "悬赏积分不能为负数"),
+})

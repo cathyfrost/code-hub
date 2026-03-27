@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     const postIds = result.recommendations.map((r) => r.postId);
 
     const posts = await prisma.post.findMany({
-      where: { id: { in: postIds } },
+      where: { id: { in: postIds }, isQuestion: false },
       include: getPostDataInclude(user.id),
     });
 

@@ -21,12 +21,19 @@ export async function submitComment({
   const { content: contentValidated } = createCommentSchema.parse({ content });
 
   const [newComment] = await prisma.$transaction(async (tx) => {
+    // 查询该帖子是否为问答帖
+    const targetPost = await tx.post.findUnique({
+      where: { id: post.id },
+      select: { isQuestion: true },
+    });
+
     const comment = await tx.comment.create({
       data: {
         content: contentValidated,
         postId: post.id,
         userId: user.id,
         parentId: parentId || null,
+        isAnswer: targetPost?.isQuestion ?? false,
       },
       include: getCommentDataInclude(user.id),
     });

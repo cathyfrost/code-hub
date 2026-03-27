@@ -20,7 +20,7 @@ model User {
   bio                   String?
   skillLevel            Int                @default(1)
   interests             String[]           @default([])
-  points                Int                @default(100)
+  points                Int                @default(10)
   session               Session[]
   posts                 Post[]
   following             Follow[]           @relation("Following")
@@ -82,6 +82,8 @@ model Post {
   isResolved          Boolean        @default(false)
   acceptedCommentId   String?        @unique
   acceptedComment     Comment?       @relation("AcceptedAnswer", fields: [acceptedCommentId], references: [id], onDelete: SetNull)
+  viewCount           Int            @default(0)
+  updateAt            DateTime       @default(now()) @updatedAt
 
   createAt DateTime @default(now())
 
@@ -112,6 +114,7 @@ model Comment {
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   postId          String
   post            Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  isAnswer        Boolean        @default(false)
   parentId        String?
   parent          Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies         Comment[]      @relation("CommentReplies")

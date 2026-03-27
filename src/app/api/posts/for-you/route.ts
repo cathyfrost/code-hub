@@ -16,6 +16,7 @@ export async function GET(req: NextRequest){
         }
 
         const posts = await prisma.post.findMany({
+            where: { isQuestion: false },
             include: getPostDataInclude(user.id),
             orderBy: {createAt: "desc"},
             take: pageSize + 1,

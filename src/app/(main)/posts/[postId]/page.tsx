@@ -8,7 +8,7 @@ import prisma from "@/lib/prisma";
 import { getPostDataInclude, UserData } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache, Suspense } from "react";
 import BackButton from "./BackButton";
 
@@ -42,6 +42,7 @@ export default async function Page({ params }: PageProps) {
   }
   const { postId } = await params;
   const post = await getPost(postId, user.id);
+  if (post.isQuestion) redirect(`/questions/${post.id}`);
 
   return (
     <main className="flex w-full min-w-0 gap-5">

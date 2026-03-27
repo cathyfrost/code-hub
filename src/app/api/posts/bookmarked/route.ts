@@ -17,7 +17,8 @@ export async function GET(req: NextRequest){
 
         const bookmarks = await prisma.bookmark.findMany({
             where: {
-                userId: user.id
+                userId: user.id,
+                post: { isQuestion: false },
             },
             include: {
                 post: {

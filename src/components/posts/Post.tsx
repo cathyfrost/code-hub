@@ -335,6 +335,8 @@ export default function Post({ post }: PostProps) {
 
   const [showComments, setShowComments] = useState(false);
 
+  if (post.isQuestion) return null;
+
   return (
     <article className="group/post space-y-3 rounded-2xl bg-card p-5 shadow-sm">
       <div className="flex justify-between gap-3">

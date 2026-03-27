@@ -49,6 +49,11 @@ export function useSubmitCommentMutation(postId: string) {
         });
       }
 
+      // 同时刷新问答区的回答列表
+      await queryClient.invalidateQueries({
+        queryKey: ["answers"],
+      });
+
       toast({
         description: newComment.parentId ? "回复已发送" : "评论已发送",
       });

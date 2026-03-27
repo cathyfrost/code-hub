@@ -15,30 +15,30 @@ export async function GET(req: NextRequest) {
     }
 
     const posts = await prisma.post.findMany({
-        where: {
-            user: {
-                followers: {
-                    some: {
-                        followerId: user.id
-                    }
-                }
-            }
+      where: {
+        isQuestion: false,
+        user: {
+          followers: {
+            some: {
+              followerId: user.id,
+            },
+          },
         },
-        orderBy: {createAt: "desc"},
-        take: pageSize + 1,
-        cursor: cursor ? {id: cursor } : undefined,
-        include: getPostDataInclude(user.id),
+      },
+      orderBy: { createAt: "desc" },
+      take: pageSize + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+      include: getPostDataInclude(user.id),
     });
 
-    const nextCursor = posts.length > pageSize ? posts[pageSize].id : null
-    
-            const data: PostsPage = {
-                posts: posts.slice(0,pageSize),
-                nextCursor
-            }
-    
-            return Response.json(data);
+    const nextCursor = posts.length > pageSize ? posts[pageSize].id : null;
 
+    const data: PostsPage = {
+      posts: posts.slice(0, pageSize),
+      nextCursor,
+    };
+
+    return Response.json(data);
   } catch (error) {
     console.error(error);
     return Response.json({ error: "内部服务器错误" }, { status: 500 });

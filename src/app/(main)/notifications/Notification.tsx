@@ -2,7 +2,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { NotificationData } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { NotificationType } from "@prisma/client";
-import { Heart, MessageCircle, User2 } from "lucide-react";
+import { CheckCircle2, Heart, MessageCircle, User2 } from "lucide-react";
 import Link from "next/link";
 
 interface NotificationProps {
@@ -28,6 +28,11 @@ export default function Notification({ notification }: NotificationProps) {
       message: `${notification.issuer.displayName} 给你的帖子点赞了`,
       icon: <Heart className="size-7 fill-red-500 text-red-500" />,
       href: `/posts/${notification.postId}`,
+    },
+    BOUNTY_ACCEPTED: {
+      message: `${notification.issuer.displayName} 采纳了你的回答`,
+      icon: <CheckCircle2 className="size-7 text-green-500" />,
+      href: `/questions/${notification.postId}`,
     },
   };
 

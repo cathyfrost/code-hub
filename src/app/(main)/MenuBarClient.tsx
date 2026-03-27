@@ -6,12 +6,12 @@ import {
   Home,
   Bot,
   BarChart3,
+  CircleHelp,
   FolderOpen,
   GraduationCap,
   ChevronDown,
   Bell,
   Mail,
-  Code,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -126,7 +126,7 @@ export default function MenuBarClient({
         title: "聊天",
         badge: msgData.unreadCount,
       },
-      { href: "/code", icon: Code, title: "代码", badge: 0 },
+      { href: "/questions", icon: CircleHelp, title: "问答", badge: 0 },
       { href: "/ai-assistant", icon: Bot, title: "AI", badge: 0 },
     ];
 
@@ -212,6 +212,18 @@ export default function MenuBarClient({
         </Link>
       </Button>
 
+      <Button
+        variant={isActive("/questions") ? "secondary" : "ghost"}
+        className="flex items-center justify-start gap-3"
+        title="问答"
+        asChild
+      >
+        <Link href="/questions">
+          <CircleHelp />
+          <span className="hidden lg:inline">问答</span>
+        </Link>
+      </Button>
+
       {menuGroups.map((group) => {
         const isExpanded = expandedGroup === group.key;
         const groupActive = isGroupActive(group);
@@ -222,7 +234,7 @@ export default function MenuBarClient({
               variant="ghost"
               onClick={() => toggleGroup(group.key)}
               className={cn(
-                "flex w-full items-center justify-start gap-3",
+                "flex items-center justify-start gap-3",
                 groupActive && !isExpanded && "text-primary",
               )}
             >

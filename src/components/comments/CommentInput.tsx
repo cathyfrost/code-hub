@@ -1,7 +1,6 @@
 import { PostData } from "@/lib/types";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useSubmitCommentMutation } from "./mutations";
-import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Loader2, SendHorizonal, X } from "lucide-react";
 
@@ -19,30 +18,40 @@ export default function CommentInput({
   replyToName,
   replyToDisplayName,
   onCancelReply,
-}: CommentInputProps)  {
+}: CommentInputProps) {
   const [input, setInput] = useState("");
   const [flyState, setFlyState] = useState<"idle" | "flying" | "returning">(
     "idle",
   );
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const mutation = useSubmitCommentMutation(post.id);
 
-  async function onSubmit(e: React.FormEvent) {
+  function resetTextareaHeight() {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }
+
+  async function onSubmit(e: React.FormEvent | React.KeyboardEvent) {
     e.preventDefault();
 
-    if (!input) return;
+    if (!input.trim()) return;
 
     setFlyState("flying");
 
     mutation.mutate(
       {
         post,
-        content: replyToDisplayName ? `回复@${replyToDisplayName}：${input}` : input,
+        content: replyToDisplayName
+          ? `回复@${replyToDisplayName}：${input}`
+          : input,
         parentId,
       },
       {
         onSuccess: () => {
           setInput("");
+          resetTextareaHeight();
           setTimeout(() => {
             setFlyState("returning");
             setTimeout(() => setFlyState("idle"), 350);
@@ -54,6 +63,20 @@ export default function CommentInput({
         },
       },
     );
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+      e.preventDefault();
+      if (input.trim()) onSubmit(e);
+    }
+    // Ctrl+Enter 或 Shift+Enter 换行：不阻止默认行为，textarea 自动换行
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
   }
 
   return (
@@ -75,7 +98,9 @@ export default function CommentInput({
         <div className="flex items-center gap-1.5 px-1 pb-1">
           <span className="text-xs text-muted-foreground">
             回复{" "}
-            <span className="font-medium text-foreground">@{replyToName}</span>
+            <span className="font-medium text-foreground">
+              @{replyToName}
+            </span>
           </span>
           <button
             onClick={onCancelReply}
@@ -86,21 +111,27 @@ export default function CommentInput({
         </div>
       )}
 
-      <form className="flex w-full items-center gap-2" onSubmit={onSubmit}>
-        <Input
+      <form className="flex w-full items-start gap-2" onSubmit={onSubmit}>
+        <textarea
+          ref={textareaRef}
           placeholder={
-            replyToName ? `回复 @${replyToName}...` : "发表一条友善的评论~"
+            replyToName
+              ? `回复 @${replyToName}...`
+              : "发表一条友善的评论~ (Enter 发送，Shift+Enter 换行)"
           }
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
           autoFocus
+          rows={2}
+          className="flex-1 resize-none overflow-hidden rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
         <Button
           type="submit"
           variant="ghost"
           size="icon"
           disabled={!input.trim() || mutation.isPending}
-          className="relative overflow-visible"
+          className="relative shrink-0 overflow-visible"
         >
           {mutation.isPending && flyState === "idle" ? (
             <Loader2 className="animate-spin" />
