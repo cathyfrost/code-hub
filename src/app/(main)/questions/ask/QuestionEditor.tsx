@@ -12,16 +12,12 @@ import {
   Code,
   Code2,
   Coins,
-  ImageIcon,
   Italic,
-  Link as LinkIcon,
-  LinkIcon as LinkInsertIcon,
   List,
   ListOrdered,
   Loader2,
   MessageSquareQuote,
   Search,
-  Unlink,
   X,
 } from "lucide-react";
 import { ClipboardEvent, useEffect, useRef, useState } from "react";
@@ -68,6 +64,109 @@ function textToTiptapNodes(text: string) {
     type: "paragraph" as const,
     content: line ? [{ type: "text" as const, text: line }] : [],
   }));
+}
+
+// ══════════════════════════════════════════════
+// ══  TipTap HTML → Markdown 转换器
+// ══════════════════════════════════════════════
+
+function htmlToMarkdown(html: string): string {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+
+  function processNode(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    const children = Array.from(el.childNodes).map(processNode).join("");
+
+    switch (tag) {
+      case "p":
+        return children + "\n\n";
+
+      case "strong":
+      case "b":
+        return `**${children}**`;
+
+      case "em":
+      case "i":
+        return `*${children}*`;
+
+      case "blockquote":
+        return (
+          children
+            .trim()
+            .split("\n")
+            .filter((line) => line.trim() !== "")
+            .map((line) => `> ${line.trim()}`)
+            .join("\n") + "\n\n"
+        );
+
+      case "code": {
+        if (el.parentElement?.tagName.toLowerCase() !== "pre") {
+          return `\`${children}\``;
+        }
+        return children;
+      }
+
+      case "pre": {
+        const codeEl = el.querySelector("code");
+        const codeText = codeEl ? codeEl.textContent || "" : children;
+        const langClass = codeEl?.className.match(/language-(\w+)/);
+        const lang = langClass ? langClass[1] : "";
+        return "```" + lang + "\n" + codeText.trimEnd() + "\n```\n\n";
+      }
+
+      case "ul": {
+        const items = Array.from(el.children)
+          .map((li) => {
+            const content = Array.from(li.childNodes).map(processNode).join("");
+            return `- ${content.replace(/\n+$/, "")}`;
+          })
+          .join("\n");
+        return items + "\n\n";
+      }
+
+      case "ol": {
+        const items = Array.from(el.children)
+          .map((li, i) => {
+            const content = Array.from(li.childNodes).map(processNode).join("");
+            return `${i + 1}. ${content.replace(/\n+$/, "")}`;
+          })
+          .join("\n");
+        return items + "\n\n";
+      }
+
+      case "li":
+        return children;
+
+      case "a": {
+        const href = el.getAttribute("href") || "";
+        return `[${children}](${href})`;
+      }
+
+      case "br":
+        return "\n";
+
+      case "h1":
+        return `# ${children}\n\n`;
+      case "h2":
+        return `## ${children}\n\n`;
+      case "h3":
+        return `### ${children}\n\n`;
+
+      default:
+        return children;
+    }
+  }
+
+  const result = Array.from(div.childNodes).map(processNode).join("");
+  return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // ── 支持的语言列表 ──
@@ -260,96 +359,6 @@ function CodeInsertDialog({
   );
 }
 
-// ── 链接插入弹窗 ──
-function LinkInsertDialog({
-  open,
-  onOpenChange,
-  onInsert,
-  onRemove,
-  initialUrl,
-  hasLink,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onInsert: (url: string) => void;
-  onRemove: () => void;
-  initialUrl: string;
-  hasLink: boolean;
-}) {
-  const [url, setUrl] = useState(initialUrl);
-
-  useEffect(() => {
-    if (open) setUrl(initialUrl);
-  }, [open, initialUrl]);
-
-  function handleInsert() {
-    if (!url.trim()) return;
-    const finalUrl =
-      url.startsWith("http://") || url.startsWith("https://")
-        ? url
-        : `https://${url}`;
-    onInsert(finalUrl);
-    onOpenChange(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{hasLink ? "编辑链接" : "插入链接"}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label>链接地址</Label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleInsert();
-                }
-              }}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            请先选中要添加链接的文本，再点击插入。
-          </p>
-        </div>
-
-        <DialogFooter className="gap-2">
-          {hasLink && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                onRemove();
-                onOpenChange(false);
-              }}
-              className="mr-auto gap-1.5"
-            >
-              <Unlink className="size-3.5" />
-              移除链接
-            </Button>
-          )}
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={handleInsert} disabled={!url.trim()}>
-            <LinkInsertIcon className="mr-1.5 size-3.5" />
-            {hasLink ? "更新链接" : "插入链接"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ════════════════════════════════════════
 // ══  QuestionEditor 主组件
 // ════════════════════════════════════════
@@ -362,7 +371,6 @@ export default function QuestionEditor() {
   const [tagInput, setTagInput] = useState("");
   const [bounty, setBounty] = useState(0);
   const [showCodeDialog, setShowCodeDialog] = useState(false);
-  const [showLinkDialog, setShowLinkDialog] = useState(false);
 
   const {
     startUpload,
@@ -388,7 +396,7 @@ export default function QuestionEditor() {
         bold: {},
         italic: {},
         blockquote: {},
-        codeBlock: false, // 用手动 ``` 插入，不用 TipTap 内置 codeBlock
+        codeBlock: false,
         orderedList: {},
         bulletList: {},
       }),
@@ -398,6 +406,8 @@ export default function QuestionEditor() {
       }),
       Link.configure({
         openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
         HTMLAttributes: {
           class: "text-primary underline cursor-pointer",
         },
@@ -417,33 +427,27 @@ export default function QuestionEditor() {
     editor.commands.focus("end");
   }
 
-  // ── 插入链接 ──
-  function handleInsertLink(url: string) {
-    if (!editor) return;
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href: url })
-      .run();
-  }
-
-  // ── 移除链接 ──
-  function handleRemoveLink() {
-    if (!editor) return;
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-  }
-
-  // ── 提交（反转义恢复原始代码） ──
+  // ── 提交：从 TipTap HTML 转 Markdown，保留格式 ──
   function onSubmit() {
+    if (!editor) return;
+
     const tags = tagInput
       .split(/[\s,]+/)
       .filter(Boolean)
       .map((t) => (t.startsWith("#") ? t : `#${t}`));
 
-    const rawContent = unescapeHtml(input);
+    // 从 TipTap 获取 HTML，转为 Markdown
+    const editorHtml = editor.getHTML();
+    let markdownContent = htmlToMarkdown(editorHtml);
 
-    const fullContent = [title, tags.length > 0 ? tags.join(" ") : "", rawContent]
+    // 反转义代码块中被 escape 的 HTML 字符
+    markdownContent = unescapeHtml(markdownContent);
+
+    const fullContent = [
+      title,
+      tags.length > 0 ? tags.join(" ") : "",
+      markdownContent,
+    ]
       .filter(Boolean)
       .join("\n");
 
@@ -457,7 +461,7 @@ export default function QuestionEditor() {
       },
       {
         onSuccess: () => {
-          editor?.commands.clearContent();
+          editor.commands.clearContent();
           resetMediaUploads();
           setTitle("");
           setTagInput("");
@@ -518,7 +522,6 @@ export default function QuestionEditor() {
           >
             {/* ── 工具栏 ── */}
             <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/50 px-2 py-1.5 text-muted-foreground">
-              {/* 加粗：选中文本后点击切换 */}
               <ToolbarButton
                 onClick={() => editor?.chain().focus().toggleBold().run()}
                 active={editor?.isActive("bold") ?? false}
@@ -527,7 +530,6 @@ export default function QuestionEditor() {
                 <Bold size={15} />
               </ToolbarButton>
 
-              {/* 斜体：选中文本后点击切换 */}
               <ToolbarButton
                 onClick={() => editor?.chain().focus().toggleItalic().run()}
                 active={editor?.isActive("italic") ?? false}
@@ -538,16 +540,6 @@ export default function QuestionEditor() {
 
               <div className="mx-1 h-4 w-px bg-border" />
 
-              {/* 链接：弹窗输入 URL */}
-              <ToolbarButton
-                onClick={() => setShowLinkDialog(true)}
-                active={editor?.isActive("link") ?? false}
-                title="插入链接"
-              >
-                <LinkIcon size={15} />
-              </ToolbarButton>
-
-              {/* 引用块 */}
               <ToolbarButton
                 onClick={() =>
                   editor?.chain().focus().toggleBlockquote().run()
@@ -558,7 +550,6 @@ export default function QuestionEditor() {
                 <MessageSquareQuote size={15} />
               </ToolbarButton>
 
-              {/* 代码块：弹窗选语言 + 输入代码 */}
               <ToolbarButton
                 onClick={() => setShowCodeDialog(true)}
                 active={false}
@@ -567,15 +558,8 @@ export default function QuestionEditor() {
                 <Code size={15} />
               </ToolbarButton>
 
-              {/* 上传图片 */}
-              <AddAttachmentsButton
-                onFilesSelected={startUpload}
-                disabled={isUploading || attachments.length >= 5}
-              />
-
               <div className="mx-1 h-4 w-px bg-border" />
 
-              {/* 有序列表 */}
               <ToolbarButton
                 onClick={() =>
                   editor?.chain().focus().toggleOrderedList().run()
@@ -586,7 +570,6 @@ export default function QuestionEditor() {
                 <ListOrdered size={15} />
               </ToolbarButton>
 
-              {/* 无序列表 */}
               <ToolbarButton
                 onClick={() =>
                   editor?.chain().focus().toggleBulletList().run()
@@ -767,22 +750,11 @@ export default function QuestionEditor() {
         </div>
       </div>
 
-      {/* ── 弹窗们 ── */}
+      {/* ── 代码插入弹窗 ── */}
       <CodeInsertDialog
         open={showCodeDialog}
         onOpenChange={setShowCodeDialog}
         onInsert={handleInsertCode}
-      />
-
-      <LinkInsertDialog
-        open={showLinkDialog}
-        onOpenChange={setShowLinkDialog}
-        onInsert={handleInsertLink}
-        onRemove={handleRemoveLink}
-        initialUrl={
-          (editor?.getAttributes("link").href as string | undefined) || ""
-        }
-        hasLink={editor?.isActive("link") ?? false}
       />
     </div>
   );
@@ -819,48 +791,7 @@ function ToolbarButton({
   );
 }
 
-/* ─── 附件相关组件 ─── */
-
-function AddAttachmentsButton({
-  onFilesSelected,
-  disabled,
-}: {
-  onFilesSelected: (files: File[]) => void;
-  disabled: boolean;
-}) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <>
-      <button
-        type="button"
-        className="rounded p-1.5 hover:bg-accent disabled:opacity-50"
-        disabled={disabled}
-        onClick={(e) => {
-          e.preventDefault();
-          fileInputRef.current?.click();
-        }}
-        title="上传图片/视频"
-      >
-        <ImageIcon size={15} />
-      </button>
-      <input
-        type="file"
-        accept="image/*, video/*"
-        multiple
-        ref={fileInputRef}
-        className="sr-only hidden"
-        onChange={(e) => {
-          const files = Array.from(e.target.files || []);
-          if (files.length) {
-            onFilesSelected(files);
-            e.target.value = "";
-          }
-        }}
-      />
-    </>
-  );
-}
+/* ─── 附件相关组件（拖拽/粘贴上传仍保留） ─── */
 
 function AttachmentPreviews({
   attachments,

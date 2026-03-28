@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["@node-rs/argon2"],
   images: {
+    unoptimized: true, // 👈 加上这一行，关闭服务端图片下载和优化
     remotePatterns: [
       {
         protocol: "https",

@@ -26,6 +26,7 @@ import BookmarkButton from "./BookmarkButton";
 import Comments from "../comments/Comments";
 import AnswerMarkdown from "@/app/(main)/questions/[questionId]/AnswerMarkdown";
 import "katex/dist/katex.min.css";
+import katex from "katex"; // 👈 新增：在顶部静态引入 katex
 
 interface PostProps {
   post: PostData;
@@ -120,23 +121,23 @@ function AIAnalyzeButton({
             AI 概述
           </div>
           <div
-  className="whitespace-pre-line"
-  dangerouslySetInnerHTML={{
-    __html: (result || "")
-      .replace(/\$\$\n?([\s\S]*?)\n?\$\$/g, (_, math) => {
-        try {
-          const katex = require("katex");
-          return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
-        } catch { return `<pre>${math}</pre>`; }
-      })
-      .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_, math) => {
-        try {
-          const katex = require("katex");
-          return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
-        } catch { return `<code>${math}</code>`; }
-      })
-  }}
-/>
+            className="whitespace-pre-line"
+            dangerouslySetInnerHTML={{
+              __html: (result || "")
+                .replace(/\$\$\n?([\s\S]*?)\n?\$\$/g, (_, math) => {
+                  try {
+                    // 👈 修改：删除了 require，直接使用顶部的 katex
+                    return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+                  } catch { return `<pre>${math}</pre>`; }
+                })
+                .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_, math) => {
+                  try {
+                    // 👈 修改：删除了 require，直接使用顶部的 katex
+                    return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+                  } catch { return `<code>${math}</code>`; }
+                })
+            }}
+          />
         </div>
       )}
     </div>

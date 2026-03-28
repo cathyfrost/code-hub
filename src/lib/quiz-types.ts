@@ -42,6 +42,7 @@ export interface TestCaseResult {
   expected: string;
   actual: string;
   time?: string;
+  memory?: number;
 }
 
 export interface SubmitResponse {

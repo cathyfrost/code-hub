@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft,
+  Check,
+  Cloud,
+  CloudOff,
   Download,
   Eye,
   Loader2,
@@ -32,6 +35,7 @@ interface NotebookEditorProps {
 }
 
 type ViewMode = "edit" | "preview" | "split";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function NotebookEditor({
   notebook,
@@ -50,10 +54,29 @@ export default function NotebookEditor({
   const [tags, setTags] = useState<string[]>(notebook?.tags || []);
   const [tagInput, setTagInput] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 用 ref 追踪最新状态，避免定时器闭包问题
+  const hasChangesRef = useRef(false);
+  const isSavingRef = useRef(false);
+  const titleRef = useRef(title);
+  const contentRef = useRef(content);
+  const folderIdRef = useRef(folderId);
+  const tagsRef = useRef(tags);
+
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+  useEffect(() => {
+    folderIdRef.current = folderId;
+  }, [folderId]);
+  useEffect(() => {
+    tagsRef.current = tags;
+  }, [tags]);
 
   const [leftWidth, setLeftWidth] = useState(50);
 
@@ -92,30 +115,21 @@ export default function NotebookEditor({
     queryFn: () => ky.get("/api/notebook-folders").json<FolderData[]>(),
   });
 
+  // 检测是否有修改
   useEffect(() => {
+    let changed: boolean;
     if (notebook) {
-      const changed =
+      changed =
         title !== notebook.title ||
         content !== notebook.content ||
         folderId !== (notebook.folderId || "none") ||
         JSON.stringify(tags) !== JSON.stringify(notebook.tags);
-      setHasChanges(changed);
     } else {
-      setHasChanges(title !== "" || content !== "");
+      changed = title !== "" || content !== "";
     }
+    setHasChanges(changed);
+    hasChangesRef.current = changed;
   }, [title, content, folderId, tags, notebook]);
-
-  useEffect(() => {
-    if (!notebook || !hasChanges) return;
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      handleSave(true);
-    }, 3000);
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, content, folderId, tags]);
 
   const createMutation = useMutation({
     mutationFn: (data: {
@@ -151,32 +165,76 @@ export default function NotebookEditor({
       queryClient.invalidateQueries({ queryKey: ["notebook-folders"] });
       queryClient.invalidateQueries({ queryKey: ["notebook-tags"] });
       setHasChanges(false);
+      hasChangesRef.current = false;
     },
     onError: () => {
       toast({ variant: "destructive", description: "保存失败" });
     },
   });
 
-  async function handleSave(isAutoSave = false) {
-    if (isSaving) return;
-    setIsSaving(true);
-    const data = {
-      title: title || "无标题笔记",
-      content,
-      folderId: folderId === "none" ? null : folderId,
-      tags,
-    };
-    try {
-      if (notebook) {
-        await updateMutation.mutateAsync(data);
-        if (!isAutoSave) toast({ description: "已保存" });
-      } else {
-        await createMutation.mutateAsync(data);
+  // 核心保存函数
+  const doSave = useCallback(
+    async (isAutoSave = false) => {
+      if (isSavingRef.current) return;
+      isSavingRef.current = true;
+      setSaveStatus("saving");
+
+      const data = {
+        title: titleRef.current || "无标题笔记",
+        content: contentRef.current,
+        folderId: folderIdRef.current === "none" ? null : folderIdRef.current,
+        tags: tagsRef.current,
+      };
+
+      try {
+        if (notebook) {
+          await updateMutation.mutateAsync(data);
+          setSaveStatus("saved");
+          // 3 秒后回到 idle
+          setTimeout(() => setSaveStatus("idle"), 3000);
+          if (!isAutoSave) toast({ description: "已保存" });
+        } else {
+          await createMutation.mutateAsync(data);
+          setSaveStatus("saved");
+        }
+      } catch {
+        setSaveStatus("error");
+        setTimeout(() => setSaveStatus("idle"), 3000);
+      } finally {
+        isSavingRef.current = false;
       }
-    } finally {
-      setIsSaving(false);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notebook],
+  );
+
+  // 每 10 秒检测一次，有修改则自动保存（仅对已创建的笔记）
+  useEffect(() => {
+    if (!notebook) return;
+
+    const interval = setInterval(() => {
+      if (hasChangesRef.current && !isSavingRef.current) {
+        doSave(true);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [notebook, doSave]);
+
+  // Ctrl+S 快捷键保存
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (hasChangesRef.current || !notebook) {
+          doSave(false);
+        }
+      }
     }
-  }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [notebook, doSave]);
 
   function handleAddTag(e: React.KeyboardEvent) {
     if (e.key === "Enter" || e.key === ",") {
@@ -207,7 +265,6 @@ export default function NotebookEditor({
     toast({ description: "导出成功" });
   }
 
-  // 用 execCommand 插入文本，这样浏览器会自动维护 undo 栈，支持 Ctrl+Z
   const insertAtCursor = useCallback(
     (prefix: string, suffix = "") => {
       const textarea = textareaRef.current;
@@ -219,10 +276,8 @@ export default function NotebookEditor({
       const selected = content.substring(start, end);
       const insertion = prefix + selected + suffix;
 
-      // 使用 document.execCommand 保留浏览器原生 undo 栈
       document.execCommand("insertText", false, insertion);
 
-      // 选中被包裹的文字
       setTimeout(() => {
         textarea.selectionStart = start + prefix.length;
         textarea.selectionEnd = start + prefix.length + selected.length;
@@ -231,11 +286,55 @@ export default function NotebookEditor({
     [content],
   );
 
-  // 处理 Tab 键缩进（同时保留 Ctrl+Z）
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Tab") {
       e.preventDefault();
       document.execCommand("insertText", false, "  ");
+    }
+  }
+
+  // 保存状态指示器
+  function SaveStatusIndicator() {
+    switch (saveStatus) {
+      case "saving":
+        return (
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            保存中...
+          </span>
+        );
+      case "saved":
+        return (
+          <span className="flex items-center gap-1.5 text-[11px] text-green-600 dark:text-green-400">
+            <Cloud className="size-3" />
+            已保存
+          </span>
+        );
+      case "error":
+        return (
+          <span className="flex items-center gap-1.5 text-[11px] text-destructive">
+            <CloudOff className="size-3" />
+            保存失败
+          </span>
+        );
+      default:
+        if (notebook && hasChanges) {
+          return (
+            <span className="flex items-center gap-1.5 text-[11px] text-amber-500">
+              <Pencil className="size-3" />
+              未保存
+            </span>
+          );
+        }
+        if (notebook) {
+          return (
+            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
+              <Check className="size-3" />
+              已是最新
+            </span>
+          );
+        }
+        return null;
     }
   }
 
@@ -261,6 +360,10 @@ export default function NotebookEditor({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <SaveStatusIndicator />
+
+          <div className="mx-1 h-4 w-px bg-border" />
+
           <Select value={folderId} onValueChange={setFolderId}>
             <SelectTrigger className="h-7 w-28 border-none bg-accent/40 text-xs shadow-none">
               <SelectValue placeholder="文件夹" />
@@ -324,23 +427,19 @@ export default function NotebookEditor({
 
           <Button
             size="sm"
-            onClick={() => handleSave()}
-            disabled={isSaving || (!hasChanges && !!notebook)}
+            onClick={() => doSave(false)}
+            disabled={
+              saveStatus === "saving" || (!hasChanges && !!notebook)
+            }
             className="h-7 gap-1.5 px-3 text-xs font-semibold"
           >
-            {isSaving ? (
+            {saveStatus === "saving" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
             {notebook ? "保存" : "创建"}
           </Button>
-
-          {notebook && hasChanges && (
-            <span className="ml-1 text-[10px] text-muted-foreground">
-              未保存
-            </span>
-          )}
         </div>
       </div>
 
@@ -396,7 +495,6 @@ export default function NotebookEditor({
       </div>
 
       {/* 编辑区域 */}
-      {/* 编辑区域 */}
       <div
         className={`flex min-h-0 flex-1 gap-0 overflow-hidden rounded-b-xl border border-t-0 bg-card ${
           viewMode === "split" ? "flex-row" : "flex-col"
@@ -413,7 +511,7 @@ export default function NotebookEditor({
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleEditorKeyDown}
               placeholder="在此输入 Markdown 内容..."
               className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-relaxed outline-none"
               spellCheck={false}

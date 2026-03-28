@@ -7,12 +7,16 @@ import { useToast } from "@/components/ui/use-toast";
 
 interface MyPointsCardClientProps {
   points: number;
+  hasSignedToday: boolean;
 }
 
-export default function MyPointsCardClient({ points }: MyPointsCardClientProps) {
+export default function MyPointsCardClient({
+  points,
+  hasSignedToday,
+}: MyPointsCardClientProps) {
   const { toast } = useToast();
   const [currentPoints, setCurrentPoints] = useState(points);
-  const [signedToday, setSignedToday] = useState(false);
+  const [signedToday, setSignedToday] = useState(hasSignedToday);
   const [loading, setLoading] = useState(false);
 
   async function handleSignin() {
@@ -45,26 +49,29 @@ export default function MyPointsCardClient({ points }: MyPointsCardClientProps) 
           <Coins className="size-4 text-orange-500" />
           我的积分
         </div>
-        <button
-          onClick={handleSignin}
-          disabled={signedToday || loading}
-          className={cn(
-            "flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-all",
-            signedToday
-              ? "bg-green-500/10 text-green-600 dark:text-green-400"
-              : "bg-primary/10 text-primary hover:bg-primary/20 active:scale-95",
-            loading && "opacity-60",
-          )}
-        >
-          {loading ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : signedToday ? (
+        {signedToday ? (
+          <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-3 py-1 text-[12px] font-medium text-green-600 dark:text-green-400">
             <Check className="size-3" />
-          ) : (
-            <Sparkles className="size-3" />
-          )}
-          {loading ? "签到中" : signedToday ? "已签到" : "每日签到"}
-        </button>
+            今日已签到
+          </span>
+        ) : (
+          <button
+            onClick={handleSignin}
+            disabled={loading}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-all",
+              "bg-primary/10 text-primary hover:bg-primary/20 active:scale-95",
+              loading && "opacity-60",
+            )}
+          >
+            {loading ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Sparkles className="size-3" />
+            )}
+            {loading ? "签到中" : "每日签到"}
+          </button>
+        )}
       </div>
       <div className="mt-2 flex items-baseline gap-1">
         <span className="text-3xl font-bold text-foreground">

@@ -124,6 +124,36 @@ const AI_ACTIONS = [
 type EditorInstance = Parameters<OnMount>[0];
 
 /* ------------------------------------------------------------------ */
+/*  localStorage 工具函数                                               */
+/* ------------------------------------------------------------------ */
+
+const STORAGE_KEY_PREFIX = "codehub-playground-";
+
+function getSavedCode(lang: string): string | null {
+  try {
+    return localStorage.getItem(`${STORAGE_KEY_PREFIX}${lang}`);
+  } catch {
+    return null;
+  }
+}
+
+function saveCode(lang: string, code: string) {
+  try {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${lang}`, code);
+  } catch {
+    // localStorage 不可用时静默失败
+  }
+}
+
+function clearSavedCode(lang: string) {
+  try {
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX}${lang}`);
+  } catch {
+    // 静默失败
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  组件                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -131,9 +161,11 @@ export default function CodePlayground() {
   const { resolvedTheme: appTheme } = useTheme();
   const router = useRouter();
 
-  // 编辑器状态
+  // 编辑器状态 — 初始化时从 localStorage 恢复
   const [language, setLanguage] = useState("cpp");
-  const [code, setCode] = useState(DEFAULT_CODE["cpp"]);
+  const [code, setCode] = useState(() => {
+    return getSavedCode("cpp") || DEFAULT_CODE["cpp"];
+  });
   const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -168,6 +200,11 @@ export default function CodePlayground() {
   const canvasStartW = useRef(0);
 
   const currentLang = LANGUAGES.find((l) => l.value === language);
+
+  // 代码变化时自动保存到 localStorage
+  useEffect(() => {
+    saveCode(language, code);
+  }, [code, language]);
 
   /* ------ 输出面板拖拽 ------ */
   const handleOutputDragStart = useCallback(
@@ -254,7 +291,9 @@ export default function CodePlayground() {
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     setLanguage(lang);
-    setCode(DEFAULT_CODE[lang] || "");
+    // 切换语言时优先恢复该语言的已保存代码
+    const saved = getSavedCode(lang);
+    setCode(saved || DEFAULT_CODE[lang] || "");
     setOutput("");
     setAiResult("");
     setHasError(false);
@@ -326,6 +365,7 @@ export default function CodePlayground() {
 
   const handleReset = () => {
     setCode(DEFAULT_CODE[language] || "");
+    clearSavedCode(language);
     setOutput("");
     setAiResult("");
     setHasError(false);

@@ -24,12 +24,29 @@ async function MyPointsCard() {
   const { user } = await validateRequest();
   if (!user) return null;
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { points: true },
-  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  return <MyPointsCardClient points={currentUser?.points ?? 0} />;
+  const [currentUser, todaySignin] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { points: true },
+    }),
+    prisma.pointTransaction.findFirst({
+      where: {
+        userId: user.id,
+        type: "DAILY_SIGNIN",
+        createAt: { gte: today },
+      },
+    }),
+  ]);
+
+  return (
+    <MyPointsCardClient
+      points={currentUser?.points ?? 0}
+      hasSignedToday={!!todaySignin}
+    />
+  );
 }
 
 /* ── 社区活跃度（参考 SO 的 Community activity） ── */

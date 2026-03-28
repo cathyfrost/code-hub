@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,12 +16,14 @@ import {
   Copy,
   Check,
   Lightbulb,
-  Sparkles,
   Trophy,
   ChevronRight,
+  HardDrive,
+  History,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import type {
   QuizDetail as QuizDetailType,
   QuizExample,
@@ -53,7 +55,95 @@ const DIFFICULTY_STYLE: Record<
 };
 
 /* ------------------------------------------------------------------ */
-/*  组件                                                               */
+/*  localStorage 工具函数                                               */
+/* ------------------------------------------------------------------ */
+
+const QUIZ_STORAGE_PREFIX = "codehub-quiz-";
+const QUIZ_HISTORY_PREFIX = "codehub-quiz-history-";
+
+function getQuizSavedCode(quizId: string, lang: string): string | null {
+  try {
+    return localStorage.getItem(`${QUIZ_STORAGE_PREFIX}${quizId}-${lang}`);
+  } catch {
+    return null;
+  }
+}
+
+function saveQuizCode(quizId: string, lang: string, code: string) {
+  try {
+    localStorage.setItem(`${QUIZ_STORAGE_PREFIX}${quizId}-${lang}`, code);
+  } catch {}
+}
+
+function clearQuizSavedCode(quizId: string, lang: string) {
+  try {
+    localStorage.removeItem(`${QUIZ_STORAGE_PREFIX}${quizId}-${lang}`);
+  } catch {}
+}
+
+/* ── 提交记录持久化 ── */
+
+interface SubmissionRecord {
+  id: string;
+  time: string;
+  language: string;
+  passed: boolean;
+  passedCases: number;
+  totalCases: number;
+  totalTime: string;
+  totalMemory: string;
+}
+
+function getSubmissionHistory(quizId: string): SubmissionRecord[] {
+  try {
+    const raw = localStorage.getItem(`${QUIZ_HISTORY_PREFIX}${quizId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addSubmissionRecord(quizId: string, record: SubmissionRecord) {
+  try {
+    const history = getSubmissionHistory(quizId);
+    history.unshift(record);
+    localStorage.setItem(
+      `${QUIZ_HISTORY_PREFIX}${quizId}`,
+      JSON.stringify(history.slice(0, 20)),
+    );
+  } catch {}
+}
+
+/* ------------------------------------------------------------------ */
+/*  复制按钮小组件                                                      */
+/* ------------------------------------------------------------------ */
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      title="复制"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-emerald-500" />
+      ) : (
+        <Copy className="h-3 w-3" />
+      )}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  主组件                                                              */
 /* ------------------------------------------------------------------ */
 
 interface Props {
@@ -74,10 +164,22 @@ export default function QuizDetail({ quizId }: Props) {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitResponse | null>(null);
-  const [resultCollapsed, setResultCollapsed] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
   const [leftWidth, setLeftWidth] = useState(42);
+
+  // 判题结果面板
+  const [resultHeight, setResultHeight] = useState(224);
+  const [resultCollapsed, setResultCollapsed] = useState(false);
+  const isDraggingResult = useRef(false);
+  const resultStartY = useRef(0);
+  const resultStartH = useRef(0);
+
+  // 底部 tab
+  const [resultTab, setResultTab] = useState<"result" | "history">("result");
+
+  // 提交记录
+  const [history, setHistory] = useState<SubmissionRecord[]>([]);
 
   /* ------ 获取题目 ------ */
   useEffect(() => {
@@ -92,7 +194,10 @@ export default function QuizDetail({ quizId }: Props) {
         const data = await res.json();
         setQuiz(data);
         const starterCode = data.starterCode as Record<string, string>;
-        if (starterCode?.cpp) {
+        const saved = getQuizSavedCode(quizId, "cpp");
+        if (saved) {
+          setCode(saved);
+        } else if (starterCode?.cpp) {
           setCode(starterCode.cpp);
         }
       } catch {
@@ -102,15 +207,23 @@ export default function QuizDetail({ quizId }: Props) {
       }
     }
     fetchQuiz();
+    setHistory(getSubmissionHistory(quizId));
   }, [quizId]);
+
+  useEffect(() => {
+    if (code && quiz) {
+      saveQuizCode(quizId, language, code);
+    }
+  }, [code, language, quizId, quiz]);
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    const starterCode = quiz?.starterCode as Record<string, string>;
-    if (starterCode?.[lang]) {
-      setCode(starterCode[lang]);
+    const saved = getQuizSavedCode(quizId, lang);
+    if (saved) {
+      setCode(saved);
     } else {
-      setCode("");
+      const starterCode = quiz?.starterCode as Record<string, string>;
+      setCode(starterCode?.[lang] || "");
     }
     setSubmitResult(null);
   };
@@ -118,6 +231,7 @@ export default function QuizDetail({ quizId }: Props) {
   const handleReset = () => {
     const starterCode = quiz?.starterCode as Record<string, string>;
     setCode(starterCode?.[language] || "");
+    clearQuizSavedCode(quizId, language);
     setSubmitResult(null);
   };
 
@@ -132,6 +246,7 @@ export default function QuizDetail({ quizId }: Props) {
     setSubmitting(true);
     setSubmitResult(null);
     setResultCollapsed(false);
+    setResultTab("result");
 
     try {
       const res = await fetch(`/api/quiz/${quizId}/submit`, {
@@ -154,6 +269,31 @@ export default function QuizDetail({ quizId }: Props) {
 
       const data: SubmitResponse = await res.json();
       setSubmitResult(data);
+
+      // 保存提交记录
+      const totalTime = data.results
+        .filter((r) => r.time)
+        .reduce((sum, r) => sum + parseFloat(r.time || "0"), 0)
+        .toFixed(3);
+      const totalMemory = data.results
+        .filter((r) => r.memory)
+        .reduce((sum, r) => sum + (r.memory || 0), 0);
+
+      const record: SubmissionRecord = {
+        id: Date.now().toString(),
+        time: new Date().toLocaleString("zh-CN"),
+        language:
+          LANGUAGES.find((l) => l.value === language)?.label || language,
+        passed: data.passed,
+        passedCases: data.passedCases,
+        totalCases: data.totalCases,
+        totalTime: `${totalTime}s`,
+        totalMemory:
+          totalMemory > 0 ? `${(totalMemory / 1024).toFixed(1)} MB` : "-",
+      };
+
+      addSubmissionRecord(quizId, record);
+      setHistory(getSubmissionHistory(quizId));
     } catch {
       setSubmitResult({
         passed: false,
@@ -167,7 +307,7 @@ export default function QuizDetail({ quizId }: Props) {
     }
   }, [code, language, quizId, submitting]);
 
-  /* ------ 拖拽分隔栏 ------ */
+  /* ------ 拖拽分隔栏（左右） ------ */
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -193,6 +333,40 @@ export default function QuizDetail({ quizId }: Props) {
       window.addEventListener("mouseup", onUp);
     },
     [leftWidth],
+  );
+
+  /* ------ 拖拽判题结果面板（上下） ------ */
+  const handleResultDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      isDraggingResult.current = true;
+      resultStartY.current = e.clientY;
+      resultStartH.current = resultHeight;
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = (ev: MouseEvent) => {
+        if (!isDraggingResult.current) return;
+        const delta = resultStartY.current - ev.clientY;
+        setResultHeight(
+          Math.min(
+            Math.max(resultStartH.current + delta, 100),
+            window.innerHeight * 0.6,
+          ),
+        );
+      };
+
+      const onUp = () => {
+        isDraggingResult.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [resultHeight],
   );
 
   if (loading) {
@@ -224,7 +398,6 @@ export default function QuizDetail({ quizId }: Props) {
         className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card"
         style={{ width: `${leftWidth}%` }}
       >
-        {/* 面包屑 + 难度 */}
         <div className="flex h-11 flex-none items-center justify-between border-b px-4">
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -256,10 +429,8 @@ export default function QuizDetail({ quizId }: Props) {
           </div>
         </div>
 
-        {/* 内容滚动区 */}
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="space-y-5 p-5">
-            {/* 标签 */}
             <div className="flex flex-wrap gap-1.5">
               {quiz.tags.map((tag) => (
                 <span
@@ -271,7 +442,6 @@ export default function QuizDetail({ quizId }: Props) {
               ))}
             </div>
 
-            {/* 题目描述 */}
             <div className="space-y-1.5">
               {quiz.description.split("\n").map((line, i) => {
                 if (line.startsWith("## ")) {
@@ -308,7 +478,7 @@ export default function QuizDetail({ quizId }: Props) {
               })}
             </div>
 
-            {/* 示例 */}
+            {/* 示例（带复制按钮） */}
             {examples.length > 0 && (
               <div className="space-y-3">
                 <h3 className="border-b border-border/50 pb-1.5 text-sm font-bold">
@@ -327,17 +497,27 @@ export default function QuizDetail({ quizId }: Props) {
                         <span className="font-semibold text-muted-foreground">
                           输入
                         </span>
-                        <pre className="overflow-x-auto rounded-md bg-background/80 px-2.5 py-1.5 font-mono text-[12px]">
-                          {ex.input}
-                        </pre>
+                        <div className="group relative">
+                          <pre className="overflow-x-auto rounded-md bg-background/80 px-2.5 py-1.5 pr-8 font-mono text-[12px]">
+                            {ex.input}
+                          </pre>
+                          <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <CopyButton text={ex.input} />
+                          </div>
+                        </div>
                       </div>
                       <div className="grid grid-cols-[48px_1fr] gap-1 text-xs">
                         <span className="font-semibold text-muted-foreground">
                           输出
                         </span>
-                        <pre className="overflow-x-auto rounded-md bg-background/80 px-2.5 py-1.5 font-mono text-[12px]">
-                          {ex.output}
-                        </pre>
+                        <div className="group relative">
+                          <pre className="overflow-x-auto rounded-md bg-background/80 px-2.5 py-1.5 pr-8 font-mono text-[12px]">
+                            {ex.output}
+                          </pre>
+                          <div className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <CopyButton text={ex.output} />
+                          </div>
+                        </div>
                       </div>
                       {ex.explanation && (
                         <div className="grid grid-cols-[48px_1fr] gap-1 text-xs">
@@ -355,7 +535,6 @@ export default function QuizDetail({ quizId }: Props) {
               </div>
             )}
 
-            {/* 提示 */}
             {quiz.hints && (
               <div>
                 <button
@@ -386,9 +565,7 @@ export default function QuizDetail({ quizId }: Props) {
 
       {/* ====== 右侧：编辑器 + 判题结果 ====== */}
       <div className="flex min-w-0 flex-1 flex-col gap-0">
-        {/* 编辑器 */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
-          {/* 工具栏 */}
           <div className="flex h-11 flex-none items-center justify-between border-b bg-accent/10 px-3">
             <div className="flex items-center gap-2">
               <select
@@ -446,7 +623,6 @@ export default function QuizDetail({ quizId }: Props) {
             </div>
           </div>
 
-          {/* Monaco Editor */}
           <div className="min-h-0 flex-1">
             <Editor
               height="100%"
@@ -479,32 +655,115 @@ export default function QuizDetail({ quizId }: Props) {
           </div>
         </div>
 
-        {/* 判题结果面板 */}
+        {/* ── 判题结果面板（可拖拽高度） ── */}
         <div
-          className={`flex flex-none flex-col overflow-hidden rounded-xl border bg-card transition-all ${
-            resultCollapsed ? "h-10" : "h-56"
-          }`}
+          className="flex flex-none flex-col overflow-hidden rounded-xl border bg-card"
+          style={{ height: resultCollapsed ? 40 : resultHeight }}
         >
+          {!resultCollapsed && (
+            <div
+              onMouseDown={handleResultDragStart}
+              className="flex h-2 flex-none cursor-row-resize items-center justify-center transition-colors hover:bg-primary/20 active:bg-primary/30"
+            >
+              <div className="h-0.5 w-8 rounded-full bg-border" />
+            </div>
+          )}
+
           <div className="flex h-10 flex-none items-center justify-between border-b px-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold">判题结果</span>
-              {submitResult && !submitResult.error && (
-                <>
-                  {submitResult.passed ? (
-                    <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5">
-                      <Sparkles className="h-3 w-3 text-emerald-500" />
-                      <span className="text-[11px] font-semibold text-emerald-500">
-                        全部通过
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] font-medium text-rose-400">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setResultTab("result")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  resultTab === "result"
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                判题结果
+                {submitResult && !submitResult.error && (
+                  <span
+                    className={cn(
+                      "ml-1.5 inline-block h-1.5 w-1.5 rounded-full",
+                      submitResult.passed ? "bg-emerald-500" : "bg-rose-500",
+                    )}
+                  />
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  setResultTab("history");
+                  setResultCollapsed(false);
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  resultTab === "history"
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <History className="h-3 w-3" />
+                提交记录
+                {history.length > 0 && (
+                  <span className="rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
+                    {history.length}
+                  </span>
+                )}
+              </button>
+
+              {resultTab === "history" && history.length > 0 && (
+                <button
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem(`codehub-quiz-history-${quizId}`);
+                    } catch {}
+                    setHistory([]);
+                  }}
+                  className="ml-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  清空
+                </button>
+              )}
+
+              {resultTab === "result" &&
+                submitResult &&
+                !submitResult.error &&
+                submitResult.results.length > 0 && (
+                  <div className="ml-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        submitResult.passed
+                          ? "text-emerald-500"
+                          : "text-rose-400",
+                      )}
+                    >
                       {submitResult.passedCases}/{submitResult.totalCases} 通过
                     </span>
-                  )}
-                </>
-              )}
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {submitResult.results
+                        .filter((r) => r.time)
+                        .reduce((sum, r) => sum + parseFloat(r.time || "0"), 0)
+                        .toFixed(3)}
+                      s
+                    </span>
+                    {submitResult.results.some((r) => r.memory) && (
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="h-3 w-3" />
+                        {(
+                          submitResult.results
+                            .filter((r) => r.memory)
+                            .reduce((sum, r) => sum + (r.memory || 0), 0) / 1024
+                        ).toFixed(1)}{" "}
+                        MB
+                      </span>
+                    )}
+                  </div>
+                )}
             </div>
+
             <Button
               variant="ghost"
               size="icon"
@@ -521,119 +780,233 @@ export default function QuizDetail({ quizId }: Props) {
 
           {!resultCollapsed && (
             <div className="min-h-0 flex-1 overflow-auto p-3">
-              {submitting ? (
-                <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <span className="text-sm">正在运行测试用例...</span>
-                </div>
-              ) : submitResult ? (
-                submitResult.error ? (
-                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
-                    <p className="text-sm text-rose-400">
-                      {submitResult.error}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {submitResult.passed && (
-                      <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-center">
-                        <Trophy className="mx-auto h-6 w-6 text-emerald-500" />
-                        <p className="text-sm font-semibold text-emerald-500">
-                          恭喜！所有测试用例通过！
-                        </p>
-                        <p className="text-[11px] text-emerald-500/60">
-                          用时{" "}
-                          {submitResult.results
-                            .filter((r) => r.time)
-                            .reduce(
-                              (sum, r) => sum + parseFloat(r.time || "0"),
-                              0,
-                            )
-                            .toFixed(3)}
-                          s
+              {resultTab === "result" && (
+                <>
+                  {submitting ? (
+                    <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <span className="text-sm">正在运行测试用例...</span>
+                    </div>
+                  ) : submitResult ? (
+                    submitResult.error ? (
+                      <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+                        <p className="text-sm text-rose-400">
+                          {submitResult.error}
                         </p>
                       </div>
-                    )}
+                    ) : (
+                      <div className="space-y-2">
+                        {submitResult.passed && (
+                          <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-center">
+                            <Trophy className="mx-auto h-6 w-6 text-emerald-500" />
+                            <p className="text-sm font-semibold text-emerald-500">
+                              恭喜！所有测试用例通过！
+                            </p>
+                          </div>
+                        )}
 
-                    {/* 用例网格 */}
-                    <div className="mb-2 flex flex-wrap gap-1.5">
-                      {submitResult.results.map((r: TestCaseResult) => (
+                        {/* 检测点网格（含耗时 + 内存） */}
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                          {submitResult.results.map((r: TestCaseResult) => (
+                            <div
+                              key={r.index}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium",
+                                r.passed
+                                  ? "bg-emerald-500/10 text-emerald-500"
+                                  : "bg-rose-500/10 text-rose-500",
+                              )}
+                            >
+                              {r.passed ? (
+                                <CheckCircle2 className="h-3 w-3" />
+                              ) : (
+                                <XCircle className="h-3 w-3" />
+                              )}
+                              <span>#{r.index + 1}</span>
+                              {r.time && (
+                                <span className="ml-1 text-[10px] opacity-60">
+                                  {r.time}s
+                                </span>
+                              )}
+                              {r.memory && (
+                                <span className="text-[10px] opacity-60">
+                                  {(r.memory / 1024).toFixed(1)}MB
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {submitResult.results.map((r: TestCaseResult) => (
+                          <div
+                            key={r.index}
+                            className={cn(
+                              "overflow-hidden rounded-lg border",
+                              r.passed
+                                ? "border-emerald-500/20 bg-emerald-500/5"
+                                : "border-rose-500/20 bg-rose-500/5",
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "flex items-center gap-2 border-b px-3 py-1.5",
+                                r.passed
+                                  ? "border-emerald-500/10 bg-emerald-500/10"
+                                  : "border-rose-500/10 bg-rose-500/10",
+                              )}
+                            >
+                              {r.passed ? (
+                                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                              ) : (
+                                <XCircle className="h-3 w-3 text-rose-500" />
+                              )}
+                              <span
+                                className={cn(
+                                  "text-[11px] font-semibold",
+                                  r.passed
+                                    ? "text-emerald-500"
+                                    : "text-rose-400",
+                                )}
+                              >
+                                用例 {r.index + 1}{" "}
+                                {r.passed ? "通过" : "未通过"}
+                              </span>
+                              <div
+                                className={cn(
+                                  "ml-auto flex items-center gap-2 text-[10px]",
+                                  r.passed
+                                    ? "text-emerald-500/50"
+                                    : "text-rose-400/50",
+                                )}
+                              >
+                                {r.time && (
+                                  <span className="flex items-center gap-0.5">
+                                    <Clock className="h-3 w-3" />
+                                    {r.time}s
+                                  </span>
+                                )}
+                                {r.memory && (
+                                  <span className="flex items-center gap-0.5">
+                                    <HardDrive className="h-3 w-3" />
+                                    {(r.memory / 1024).toFixed(1)}MB
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 p-3 font-mono text-xs">
+                              <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
+                                <span className="font-sans text-[11px] font-medium text-muted-foreground">
+                                  输入
+                                </span>
+                                <pre className="overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px]">
+                                  {r.input.length > 80
+                                    ? r.input.slice(0, 80) + "..."
+                                    : r.input}
+                                </pre>
+                              </div>
+                              <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
+                                <span className="font-sans text-[11px] font-medium text-muted-foreground">
+                                  预期
+                                </span>
+                                <pre className="overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px] text-emerald-500">
+                                  {r.expected}
+                                </pre>
+                              </div>
+                              <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
+                                <span className="font-sans text-[11px] font-medium text-muted-foreground">
+                                  实际
+                                </span>
+                                <pre
+                                  className={cn(
+                                    "overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px]",
+                                    r.passed
+                                      ? "text-emerald-500"
+                                      : "text-rose-400",
+                                  )}
+                                >
+                                  {r.actual.length > 150
+                                    ? r.actual.slice(0, 150) + "..."
+                                    : r.actual}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 py-6 text-muted-foreground">
+                      <Play className="h-6 w-6 opacity-20" />
+                      <p className="text-xs">编写代码后点击「提交判题」</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {resultTab === "history" && (
+                <>
+                  {history.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-6 text-muted-foreground">
+                      <History className="h-6 w-6 opacity-20" />
+                      <p className="text-xs">暂无提交记录</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {history.map((record) => (
                         <div
-                          key={r.index}
-                          className={`flex h-7 min-w-[56px] items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium ${
-                            r.passed
-                              ? "bg-emerald-500/10 text-emerald-500"
-                              : "bg-rose-500/10 text-rose-500"
-                          }`}
-                        >
-                          {r.passed ? (
-                            <CheckCircle2 className="h-3 w-3" />
-                          ) : (
-                            <XCircle className="h-3 w-3" />
+                          key={record.id}
+                          className={cn(
+                            "flex items-center justify-between rounded-lg border px-3 py-2",
+                            record.passed
+                              ? "border-emerald-500/20 bg-emerald-500/5"
+                              : "border-rose-500/20 bg-rose-500/5",
                           )}
-                          #{r.index + 1}
+                        >
+                          <div className="flex items-center gap-3">
+                            {record.passed ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-rose-500" />
+                            )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "text-xs font-semibold",
+                                    record.passed
+                                      ? "text-emerald-500"
+                                      : "text-rose-400",
+                                  )}
+                                >
+                                  {record.passed ? "通过" : "未通过"}
+                                </span>
+                                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                  {record.language}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {record.passedCases}/{record.totalCases} 用例
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground/60">
+                                {record.time}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {record.totalTime}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <HardDrive className="h-3 w-3" />
+                              {record.totalMemory}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
-
-                    {/* 失败的用例详情 */}
-                    {submitResult.results
-                      .filter((r) => !r.passed)
-                      .map((r: TestCaseResult) => (
-                        <div
-                          key={r.index}
-                          className="overflow-hidden rounded-lg border border-rose-500/20 bg-rose-500/5"
-                        >
-                          <div className="flex items-center gap-2 border-b border-rose-500/10 bg-rose-500/10 px-3 py-1.5">
-                            <XCircle className="h-3 w-3 text-rose-500" />
-                            <span className="text-[11px] font-semibold text-rose-400">
-                              用例 {r.index + 1} 未通过
-                            </span>
-                            {r.time && (
-                              <span className="ml-auto text-[10px] text-rose-400/50">
-                                <Clock className="inline h-3 w-3" /> {r.time}s
-                              </span>
-                            )}
-                          </div>
-                          <div className="space-y-1.5 p-3 font-mono text-xs">
-                            <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
-                              <span className="font-sans text-[11px] font-medium text-muted-foreground">
-                                输入
-                              </span>
-                              <pre className="overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px]">
-                                {r.input.length > 80
-                                  ? r.input.slice(0, 80) + "..."
-                                  : r.input}
-                              </pre>
-                            </div>
-                            <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
-                              <span className="font-sans text-[11px] font-medium text-muted-foreground">
-                                预期
-                              </span>
-                              <pre className="overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px] text-emerald-500">
-                                {r.expected}
-                              </pre>
-                            </div>
-                            <div className="grid grid-cols-[36px_1fr] items-start gap-1.5">
-                              <span className="font-sans text-[11px] font-medium text-muted-foreground">
-                                实际
-                              </span>
-                              <pre className="overflow-x-auto rounded bg-background/50 px-2 py-1 text-[11px] text-rose-400">
-                                {r.actual.length > 150
-                                  ? r.actual.slice(0, 150) + "..."
-                                  : r.actual}
-                              </pre>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2 py-6 text-muted-foreground">
-                  <Play className="h-6 w-6 opacity-20" />
-                  <p className="text-xs">编写代码后点击「提交判题」</p>
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
