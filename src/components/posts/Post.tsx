@@ -26,7 +26,7 @@ import BookmarkButton from "./BookmarkButton";
 import Comments from "../comments/Comments";
 import AnswerMarkdown from "@/app/(main)/questions/[questionId]/AnswerMarkdown";
 import "katex/dist/katex.min.css";
-import katex from "katex"; // 👈 新增：在顶部静态引入 katex
+import katex from "katex";
 
 interface PostProps {
   post: PostData;
@@ -126,7 +126,6 @@ function AIAnalyzeButton({
               __html: (result || "")
                 .replace(/\$\$\n?([\s\S]*?)\n?\$\$/g, (_, math) => {
                   try {
-                    // 👈 修改：删除了 require，直接使用顶部的 katex
                     return katex.renderToString(math.trim(), {
                       displayMode: true,
                       throwOnError: false,
@@ -137,7 +136,6 @@ function AIAnalyzeButton({
                 })
                 .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_, math) => {
                   try {
-                    // 👈 修改：删除了 require，直接使用顶部的 katex
                     return katex.renderToString(math.trim(), {
                       displayMode: false,
                       throwOnError: false,
@@ -154,7 +152,6 @@ function AIAnalyzeButton({
   );
 }
 
-// ── 图片灯箱弹窗 ──
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
@@ -292,13 +289,15 @@ export default function Post({ post }: PostProps) {
         )}
       </div>
 
-      {/* 正文 — Markdown 渲染（带行内评论） */}
       <AnswerMarkdown
         content={post.content}
         postId={post.id}
         inlineComments={inlineComments}
         onInlineCommentAdded={(newComment) =>
           setInlineComments((prev) => [...prev, newComment])
+        }
+        onInlineCommentDeleted={(commentId) =>
+          setInlineComments((prev) => prev.filter((c) => c.id !== commentId))
         }
       />
 
@@ -420,35 +419,17 @@ function CommentButton({ post, onClick }: CommentButtonProps) {
     <>
       <style jsx global>{`
         @keyframes bubblePop {
-          0% {
-            transform: scale(1);
-          }
-          20% {
-            transform: scale(1.35);
-          }
-          40% {
-            transform: scale(0.85);
-          }
-          60% {
-            transform: scale(1.15);
-          }
-          80% {
-            transform: scale(0.95);
-          }
-          100% {
-            transform: scale(1);
-          }
+          0% { transform: scale(1); }
+          20% { transform: scale(1.35); }
+          40% { transform: scale(0.85); }
+          60% { transform: scale(1.15); }
+          80% { transform: scale(0.95); }
+          100% { transform: scale(1); }
         }
         @keyframes numSlide {
-          0% {
-            transform: translateY(0);
-          }
-          40% {
-            transform: translateY(-2px);
-          }
-          100% {
-            transform: translateY(0);
-          }
+          0% { transform: translateY(0); }
+          40% { transform: translateY(-2px); }
+          100% { transform: translateY(0); }
         }
       `}</style>
       <button
@@ -459,19 +440,13 @@ function CommentButton({ post, onClick }: CommentButtonProps) {
           className="size-[18px] text-muted-foreground transition-all duration-200 group-hover/comment:scale-110 group-hover/comment:text-primary"
           style={
             anim === "click"
-              ? {
-                  animation: "bubblePop 0.5s cubic-bezier(.17,.89,.32,1.28)",
-                }
+              ? { animation: "bubblePop 0.5s cubic-bezier(.17,.89,.32,1.28)" }
               : undefined
           }
         />
         <span
           className="text-sm font-medium tabular-nums text-muted-foreground transition-colors duration-200 group-hover/comment:text-primary"
-          style={
-            anim === "click"
-              ? { animation: "numSlide 0.35s ease-out" }
-              : undefined
-          }
+          style={anim === "click" ? { animation: "numSlide 0.35s ease-out" } : undefined}
         >
           {post._count.comments} <span className="hidden sm:inline">评论</span>
         </span>

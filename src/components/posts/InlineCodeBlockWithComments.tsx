@@ -37,6 +37,7 @@ interface Props {
   codeBlockIndex: number;
   inlineComments: InlineCommentData[];
   onCommentAdded: (comment: InlineCommentData) => void;
+  onCommentDeleted?: (commentId: string) => void;
 }
 
 export default function InlineCodeBlockWithComments({
@@ -46,6 +47,7 @@ export default function InlineCodeBlockWithComments({
   codeBlockIndex,
   inlineComments,
   onCommentAdded,
+  onCommentDeleted,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
@@ -54,17 +56,32 @@ export default function InlineCodeBlockWithComments({
   const shouldCollapse = lineCount > CODE_COLLAPSE_THRESHOLD;
   const [expanded, setExpanded] = useState(!shouldCollapse);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
+  
+  // 核心：分离“控制打开的行号”和“动画渲染的行号”
   const [openThreadLine, setOpenThreadLine] = useState<number | null>(null);
+  const [animatingLine, setAnimatingLine] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 点击外部关闭行内评论
+  // 修复问题2：忽略弹窗和下拉菜单的点击事件，防止误触发收起
   useEffect(() => {
     if (openThreadLine === null) return;
     function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Element;
+      
+      // 如果点击的是 Shadcn(Radix UI) 弹窗、菜单等 Portal 元素，直接忽略
+      if (
+        target.closest('[role="dialog"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[data-radix-popper-content-wrapper]') ||
+        target.closest('[data-state="open"]')
+      ) {
+        return;
+      }
+
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(target)
       ) {
         setOpenThreadLine(null);
       }
@@ -73,13 +90,23 @@ export default function InlineCodeBlockWithComments({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openThreadLine]);
 
+  // 修复问题3：监听 openThreadLine 的变化，处理收起时的延迟卸载
+  useEffect(() => {
+    if (openThreadLine !== null) {
+      setAnimatingLine(openThreadLine);
+    } else {
+      // 收起时，给 300ms 播放动画，然后再将内容置空
+      const timer = setTimeout(() => setAnimatingLine(null), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [openThreadLine]);
+
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  // 按行高亮
   useEffect(() => {
     const normalizedLang = normalizeLang(language.toLowerCase());
     if (
@@ -99,12 +126,10 @@ export default function InlineCodeBlockWithComments({
     }
   }, [code, language]);
 
-  // 按行号分组评论
   function getCommentsForLine(lineNum: number) {
     return inlineComments.filter((c) => c.lineNumber === lineNum);
   }
 
-  // 有评论的行号集合
   const commentedLines = new Map<number, number>();
   for (const c of inlineComments) {
     commentedLines.set(
@@ -117,12 +142,14 @@ export default function InlineCodeBlockWithComments({
     ? lineCount
     : Math.min(lineCount, CODE_COLLAPSE_THRESHOLD);
 
+  const isThreadVisible = openThreadLine !== null;
+  const displayLine = openThreadLine ?? animatingLine;
+
   return (
     <div
       ref={containerRef}
       className="qa-code-interactive group relative my-3 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]"
     >
-      {/* 顶栏 */}
       <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-1.5 text-[12px] text-[hsl(var(--muted-foreground))]">
         <span className="font-semibold uppercase tracking-wider">
           {language.toUpperCase()}{" "}
@@ -167,7 +194,6 @@ export default function InlineCodeBlockWithComments({
         </div>
       </div>
 
-      {/* 代码行 + 行内评论 */}
       <div className="relative overflow-x-auto">
         <table className="w-full border-collapse font-mono text-[13px] leading-[1.65]">
           <tbody>
@@ -180,7 +206,6 @@ export default function InlineCodeBlockWithComments({
 
               return (
                 <tr key={lineNum} className="group/line">
-                  {/* 行号列 */}
                   <td
                     className={cn(
                       "select-none whitespace-nowrap border-r border-[hsl(var(--border)/0.3)] px-3 text-right text-[12px] text-[hsl(var(--muted-foreground)/0.5)] align-top",
@@ -191,7 +216,6 @@ export default function InlineCodeBlockWithComments({
                     onMouseLeave={() => setHoveredLine(null)}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      {/* hover 时显示 + 号 */}
                       {isHovered && !hasComments && (
                         <button
                           onClick={() =>
@@ -202,7 +226,6 @@ export default function InlineCodeBlockWithComments({
                           <MessageSquarePlus className="size-3.5" />
                         </button>
                       )}
-                      {/* 有评论时常驻显示图标 */}
                       {hasComments && (
                         <button
                           onClick={() =>
@@ -219,7 +242,6 @@ export default function InlineCodeBlockWithComments({
                       <span>{lineNum}</span>
                     </div>
                   </td>
-                  {/* 代码内容列 */}
                   <td
                     className={cn(
                       "whitespace-pre px-4 align-top",
@@ -248,18 +270,27 @@ export default function InlineCodeBlockWithComments({
         </table>
       </div>
 
-      {/* 展开的行内评论 thread */}
-      {openThreadLine !== null && (
-        <InlineCommentThread
-          postId={postId}
-          codeBlockIndex={codeBlockIndex}
-          lineNumber={openThreadLine}
-          comments={getCommentsForLine(openThreadLine)}
-          onCommentAdded={onCommentAdded}
-        />
-      )}
+      {/* 修复问题3：通过 CSS Grid 1fr 实现手风琴动画 */}
+      <div
+        className={cn(
+          "grid transition-all duration-300 ease-in-out",
+          isThreadVisible ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="overflow-hidden">
+          {displayLine !== null && (
+            <InlineCommentThread
+              postId={postId}
+              codeBlockIndex={codeBlockIndex}
+              lineNumber={displayLine}
+              comments={getCommentsForLine(displayLine)}
+              onCommentAdded={onCommentAdded}
+              onCommentDeleted={onCommentDeleted}
+            />
+          )}
+        </div>
+      </div>
 
-      {/* 折叠遮罩 */}
       {!expanded && shouldCollapse && (
         <div
           onClick={() => setExpanded(true)}
@@ -272,7 +303,6 @@ export default function InlineCodeBlockWithComments({
         </div>
       )}
 
-      {/* shiki 行内高亮样式 */}
       <style jsx global>{`
         .qa-code-shiki-line .shiki {
           display: inline;

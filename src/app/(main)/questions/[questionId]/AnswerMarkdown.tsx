@@ -176,6 +176,7 @@ interface AnswerMarkdownProps {
   postId?: string;
   inlineComments?: InlineCommentData[];
   onInlineCommentAdded?: (comment: InlineCommentData) => void;
+  onInlineCommentDeleted?: (commentId: string) => void;
 }
 
 export default function AnswerMarkdown({
@@ -183,6 +184,7 @@ export default function AnswerMarkdown({
   postId,
   inlineComments,
   onInlineCommentAdded,
+  onInlineCommentDeleted,
 }: AnswerMarkdownProps) {
   const [nonCodeHtmlParts, setNonCodeHtmlParts] = useState<string[]>([]);
   const [codeBlocks, setCodeBlocks] = useState<Array<{ lang: string; code: string }>>([]);
@@ -197,13 +199,11 @@ export default function AnswerMarkdown({
     const withMath = renderMath(content);
     let rendered = md.render(withMath);
 
-    // #标签 高亮（排除 HTML 属性、URL 中的 #，以及代码占位符中的 #）
     rendered = rendered.replace(
       /(?<!["\/\w])#([^\s#<>{};()&]+)/g,
       '<a href="/hashtag/$1" class="qa-hashtag">#$1</a>',
     );
 
-    // 用占位符拆分 HTML
     const placeholderRegex = new RegExp(
       `${PLACEHOLDER_PREFIX}(.*?)${PLACEHOLDER_PREFIX}([\\s\\S]*?)${PLACEHOLDER_PREFIX}END${PLACEHOLDER_PREFIX}`,
       "g",
@@ -257,6 +257,7 @@ export default function AnswerMarkdown({
             codeBlockIndex={i}
             inlineComments={blockComments}
             onCommentAdded={onInlineCommentAdded}
+            onCommentDeleted={onInlineCommentDeleted}
           />,
         );
       } else {
@@ -274,16 +275,8 @@ export default function AnswerMarkdown({
   return (
     <>
       <style jsx global>{`
-        .qa-markdown {
-          font-size: 15px;
-          line-height: 1.8;
-          color: hsl(var(--foreground) / 0.9);
-          word-wrap: break-word;
-        }
-        .qa-markdown h1 {
-          font-size: 1.4em; font-weight: 700; margin: 1.2em 0 0.6em;
-          padding-bottom: 0.2em; border-bottom: 1px solid hsl(var(--border));
-        }
+        .qa-markdown { font-size: 15px; line-height: 1.8; color: hsl(var(--foreground) / 0.9); word-wrap: break-word; }
+        .qa-markdown h1 { font-size: 1.4em; font-weight: 700; margin: 1.2em 0 0.6em; padding-bottom: 0.2em; border-bottom: 1px solid hsl(var(--border)); }
         .qa-markdown h2 { font-size: 1.2em; font-weight: 700; margin: 1.1em 0 0.5em; }
         .qa-markdown h3 { font-size: 1.05em; font-weight: 600; margin: 1em 0 0.4em; }
         .qa-markdown p { margin: 0.5em 0; }
@@ -291,23 +284,10 @@ export default function AnswerMarkdown({
         .qa-markdown em { font-style: italic; }
         .qa-markdown a { color: hsl(var(--primary)); text-decoration: none; }
         .qa-markdown a:hover { text-decoration: underline; }
-        .qa-markdown .qa-hashtag {
-          color: hsl(var(--primary));
-          font-weight: 500;
-          text-decoration: none;
-        }
-        .qa-markdown .qa-hashtag:hover {
-          text-decoration: underline;
-        }
-        .qa-markdown code:not(pre code) {
-          background: hsl(var(--muted)); color: hsl(var(--primary));
-          padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em;
-          font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace; font-weight: 500;
-        }
-        .qa-markdown blockquote {
-          margin: 0.6em 0; padding: 0.4em 1em;
-          border-left: 3px solid hsl(var(--border)); color: hsl(var(--muted-foreground));
-        }
+        .qa-markdown .qa-hashtag { color: hsl(var(--primary)); font-weight: 500; text-decoration: none; }
+        .qa-markdown .qa-hashtag:hover { text-decoration: underline; }
+        .qa-markdown code:not(pre code) { background: hsl(var(--muted)); color: hsl(var(--primary)); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em; font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace; font-weight: 500; }
+        .qa-markdown blockquote { margin: 0.6em 0; padding: 0.4em 1em; border-left: 3px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); }
         .qa-markdown blockquote p { margin: 0.2em 0; }
         .qa-markdown ul, .qa-markdown ol { margin: 0.4em 0; padding-left: 1.6em; }
         .qa-markdown li { margin: 0.2em 0; }
@@ -315,10 +295,7 @@ export default function AnswerMarkdown({
         .qa-markdown ol { list-style: decimal; }
         .qa-markdown hr { border: none; border-top: 1px solid hsl(var(--border)); margin: 1.2em 0; }
         .qa-markdown img { max-width: 100%; border-radius: 8px; margin: 0.6em 0; }
-        .qa-markdown table {
-          width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 13px;
-          border: 1px solid hsl(var(--border)); border-radius: 8px; overflow: hidden;
-        }
+        .qa-markdown table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 13px; border: 1px solid hsl(var(--border)); border-radius: 8px; overflow: hidden; }
         .qa-markdown thead { background: hsl(var(--muted) / 0.5); }
         .qa-markdown th { padding: 6px 12px; text-align: left; font-weight: 600; font-size: 12px; border-bottom: 2px solid hsl(var(--border)); }
         .qa-markdown td { padding: 6px 12px; border-bottom: 1px solid hsl(var(--border) / 0.5); }
@@ -328,21 +305,9 @@ export default function AnswerMarkdown({
         .qa-markdown .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
         .qa-markdown .katex { font-size: 1.1em; }
 
-        /* 代码块内 shiki 样式 */
-        .qa-code-shiki .shiki {
-          margin: 0; padding: 1em 1.2em; overflow-x: auto;
-          font-size: 13px; line-height: 1.65;
-          font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
-          border-radius: 0; background: transparent !important;
-        }
-        .qa-code-shiki .shiki code {
-          background: none !important; padding: 0; font-size: inherit;
-        }
-        html.dark .qa-code-shiki .shiki,
-        html.dark .qa-code-shiki .shiki span {
-          color: var(--shiki-dark) !important;
-          background-color: transparent !important;
-        }
+        .qa-code-shiki .shiki { margin: 0; padding: 1em 1.2em; overflow-x: auto; font-size: 13px; line-height: 1.65; font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace; border-radius: 0; background: transparent !important; }
+        .qa-code-shiki .shiki code { background: none !important; padding: 0; font-size: inherit; }
+        html.dark .qa-code-shiki .shiki, html.dark .qa-code-shiki .shiki span { color: var(--shiki-dark) !important; background-color: transparent !important; }
       `}</style>
       <div>{elements}</div>
     </>
