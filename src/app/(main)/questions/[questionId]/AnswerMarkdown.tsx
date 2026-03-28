@@ -8,6 +8,8 @@ import "katex/dist/katex.min.css";
 import { codeToHtml } from "shiki";
 import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { InlineCommentData } from "@/lib/types";
+import InlineCodeBlockWithComments from "@/components/posts/InlineCodeBlockWithComments";
 
 // ── 常量 ──
 const CODE_COLLAPSE_THRESHOLD = 10;
@@ -62,7 +64,7 @@ const md = new MarkdownIt({
   },
 }).use(taskLists, { enabled: false, label: true });
 
-// ── 可交互的代码块组件 ──
+// ── 可交互的代码块组件（纯渲染模式，无行内评论） ──
 function InteractiveCodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
@@ -171,9 +173,17 @@ function InteractiveCodeBlock({ language, code }: { language: string; code: stri
 // ── 主组件 ──
 interface AnswerMarkdownProps {
   content: string;
+  postId?: string;
+  inlineComments?: InlineCommentData[];
+  onInlineCommentAdded?: (comment: InlineCommentData) => void;
 }
 
-export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
+export default function AnswerMarkdown({
+  content,
+  postId,
+  inlineComments,
+  onInlineCommentAdded,
+}: AnswerMarkdownProps) {
   const [nonCodeHtmlParts, setNonCodeHtmlParts] = useState<string[]>([]);
   const [codeBlocks, setCodeBlocks] = useState<Array<{ lang: string; code: string }>>([]);
 
@@ -234,13 +244,30 @@ export default function AnswerMarkdown({ content }: AnswerMarkdownProps) {
       );
     }
     if (i < codeBlocks.length) {
-      elements.push(
-        <InteractiveCodeBlock
-          key={`code-${i}`}
-          language={codeBlocks[i].lang}
-          code={codeBlocks[i].code}
-        />,
-      );
+      if (postId && onInlineCommentAdded) {
+        const blockComments = (inlineComments || []).filter(
+          (c) => c.codeBlockIndex === i,
+        );
+        elements.push(
+          <InlineCodeBlockWithComments
+            key={`code-${i}`}
+            language={codeBlocks[i].lang}
+            code={codeBlocks[i].code}
+            postId={postId}
+            codeBlockIndex={i}
+            inlineComments={blockComments}
+            onCommentAdded={onInlineCommentAdded}
+          />,
+        );
+      } else {
+        elements.push(
+          <InteractiveCodeBlock
+            key={`code-${i}`}
+            language={codeBlocks[i].lang}
+            code={codeBlocks[i].code}
+          />,
+        );
+      }
     }
   }
 

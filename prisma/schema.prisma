@@ -28,6 +28,7 @@ model User {
   likes                 Like[]
   bookmarks             Bookmark[]
   comments              Comment[]
+  inlineComments        InlineComment[]
   commentLikes          CommentLike[]
   aiConversations       AiConversation[]
   quizSubmissions       QuizSubmission[]
@@ -64,26 +65,27 @@ model Follow {
 }
 
 model Post {
-  id                  String         @id @default(cuid())
+  id                  String          @id @default(cuid())
   content             String
   userId              String
-  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   attachments         Media[]
   likes               Like[]
   bookmarks           Bookmark[]
   comments            Comment[]
-  tags                String[]       @default([])
-  difficulty          Int            @default(1)
-  codeBlocks          Int            @default(0)
+  inlineComments      InlineComment[]
+  tags                String[]        @default([])
+  difficulty          Int             @default(1)
+  codeBlocks          Int             @default(0)
   linkedNotifications Notification[]
   // ── 问答悬赏字段 ──
-  isQuestion          Boolean        @default(false)
-  bounty              Int            @default(0)
-  isResolved          Boolean        @default(false)
-  acceptedCommentId   String?        @unique
-  acceptedComment     Comment?       @relation("AcceptedAnswer", fields: [acceptedCommentId], references: [id], onDelete: SetNull)
-  viewCount           Int            @default(0)
-  updateAt            DateTime       @default(now()) @updatedAt
+  isQuestion          Boolean         @default(false)
+  bounty              Int             @default(0)
+  isResolved          Boolean         @default(false)
+  acceptedCommentId   String?         @unique
+  acceptedComment     Comment?        @relation("AcceptedAnswer", fields: [acceptedCommentId], references: [id], onDelete: SetNull)
+  viewCount           Int             @default(0)
+  updateAt            DateTime        @default(now()) @updatedAt
 
   createAt DateTime @default(now())
 
@@ -126,6 +128,24 @@ model Comment {
   createAt DateTime @default(now())
 
   @@map("comments")
+}
+
+model InlineComment {
+  id             String @id @default(cuid())
+  content        String
+  lineNumber     Int
+  // 关联到哪个帖子
+  postId         String
+  post           Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // 关联到第几个代码块（一个帖子可能有多段代码）
+  codeBlockIndex Int    @default(0)
+  // 评论者
+  userId         String
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createAt DateTime @default(now())
+
+  @@map("inline_comments")
 }
 
 model CommentLike {

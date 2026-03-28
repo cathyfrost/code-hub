@@ -38,20 +38,20 @@ export function getPostDataInclude(loggedInUserId: string) {
     },
     attachments: true,
     likes: {
-      where: {
-        userId: loggedInUserId,
-      },
-      select: {
-        userId: true,
-      },
+      where: { userId: loggedInUserId },
+      select: { userId: true },
     },
     bookmarks: {
-      where: {
-        userId: loggedInUserId,
+      where: { userId: loggedInUserId },
+      select: { userId: true },
+    },
+    inlineComments: {
+      include: {
+        user: {
+          select: getUserDataSelect(loggedInUserId),
+        },
       },
-      select: {
-        userId: true,
-      },
+      orderBy: { createAt: "asc" as const },
     },
     _count: {
       select: {
@@ -242,3 +242,17 @@ export interface NotificationCountInfo {
 export interface MessageCountInfo{
   unreadCount: number;
 }
+
+// ── 行内评论相关 ──
+
+export function getInlineCommentInclude(loggedInUserId: string) {
+  return {
+    user: {
+      select: getUserDataSelect(loggedInUserId),
+    },
+  } satisfies Prisma.InlineCommentInclude;
+}
+
+export type InlineCommentData = Prisma.InlineCommentGetPayload<{
+  include: ReturnType<typeof getInlineCommentInclude>;
+}>;

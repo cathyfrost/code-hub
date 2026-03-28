@@ -127,15 +127,25 @@ function AIAnalyzeButton({
                 .replace(/\$\$\n?([\s\S]*?)\n?\$\$/g, (_, math) => {
                   try {
                     // 👈 修改：删除了 require，直接使用顶部的 katex
-                    return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
-                  } catch { return `<pre>${math}</pre>`; }
+                    return katex.renderToString(math.trim(), {
+                      displayMode: true,
+                      throwOnError: false,
+                    });
+                  } catch {
+                    return `<pre>${math}</pre>`;
+                  }
                 })
                 .replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (_, math) => {
                   try {
                     // 👈 修改：删除了 require，直接使用顶部的 katex
-                    return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
-                  } catch { return `<code>${math}</code>`; }
-                })
+                    return katex.renderToString(math.trim(), {
+                      displayMode: false,
+                      throwOnError: false,
+                    });
+                  } catch {
+                    return `<code>${math}</code>`;
+                  }
+                }),
             }}
           />
         </div>
@@ -235,6 +245,10 @@ export default function Post({ post }: PostProps) {
   const { user } = useSession();
   const [showComments, setShowComments] = useState(false);
 
+  const [inlineComments, setInlineComments] = useState(
+    post.inlineComments ?? [],
+  );
+
   if (post.isQuestion) return null;
 
   return (
@@ -278,8 +292,15 @@ export default function Post({ post }: PostProps) {
         )}
       </div>
 
-      {/* 正文 — Markdown 渲染 */}
-      <AnswerMarkdown content={post.content} />
+      {/* 正文 — Markdown 渲染（带行内评论） */}
+      <AnswerMarkdown
+        content={post.content}
+        postId={post.id}
+        inlineComments={inlineComments}
+        onInlineCommentAdded={(newComment) =>
+          setInlineComments((prev) => [...prev, newComment])
+        }
+      />
 
       {!!post.attachments.length && (
         <MediaPreviews attachments={post.attachments} />
@@ -297,9 +318,7 @@ export default function Post({ post }: PostProps) {
             postId={post.id}
             initialState={{
               likes: post._count.likes,
-              isLikedByUser: post.likes.some(
-                (like) => like.userId === user.id,
-              ),
+              isLikedByUser: post.likes.some((like) => like.userId === user.id),
             }}
           />
           <CommentButton
@@ -401,17 +420,35 @@ function CommentButton({ post, onClick }: CommentButtonProps) {
     <>
       <style jsx global>{`
         @keyframes bubblePop {
-          0%   { transform: scale(1); }
-          20%  { transform: scale(1.35); }
-          40%  { transform: scale(0.85); }
-          60%  { transform: scale(1.15); }
-          80%  { transform: scale(0.95); }
-          100% { transform: scale(1); }
+          0% {
+            transform: scale(1);
+          }
+          20% {
+            transform: scale(1.35);
+          }
+          40% {
+            transform: scale(0.85);
+          }
+          60% {
+            transform: scale(1.15);
+          }
+          80% {
+            transform: scale(0.95);
+          }
+          100% {
+            transform: scale(1);
+          }
         }
         @keyframes numSlide {
-          0%   { transform: translateY(0); }
-          40%  { transform: translateY(-2px); }
-          100% { transform: translateY(0); }
+          0% {
+            transform: translateY(0);
+          }
+          40% {
+            transform: translateY(-2px);
+          }
+          100% {
+            transform: translateY(0);
+          }
         }
       `}</style>
       <button
@@ -419,12 +456,11 @@ function CommentButton({ post, onClick }: CommentButtonProps) {
         className="group/comment -ml-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors duration-200 hover:bg-primary/10"
       >
         <MessageSquare
-          className="size-[18px] text-muted-foreground transition-all duration-200 group-hover/comment:text-primary group-hover/comment:scale-110"
+          className="size-[18px] text-muted-foreground transition-all duration-200 group-hover/comment:scale-110 group-hover/comment:text-primary"
           style={
             anim === "click"
               ? {
-                  animation:
-                    "bubblePop 0.5s cubic-bezier(.17,.89,.32,1.28)",
+                  animation: "bubblePop 0.5s cubic-bezier(.17,.89,.32,1.28)",
                 }
               : undefined
           }
@@ -437,8 +473,7 @@ function CommentButton({ post, onClick }: CommentButtonProps) {
               : undefined
           }
         >
-          {post._count.comments}{" "}
-          <span className="hidden sm:inline">评论</span>
+          {post._count.comments} <span className="hidden sm:inline">评论</span>
         </span>
       </button>
     </>
