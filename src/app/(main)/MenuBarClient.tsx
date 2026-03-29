@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Bell,
   Mail,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -57,6 +58,16 @@ const menuGroups: MenuGroup[] = [
     children: [
       { title: "代码编辑器", href: "/code" },
       { title: "编程题库", href: "/quiz" },
+      { title: "AI助手", href: "/ai-assistant" },
+    ],
+  },
+  {
+    key: "community",
+    title: "社区活动",
+    icon: <Users />,
+    children: [
+      { title: "算法竞赛", href: "/contest" },
+      { title: "编程协作", href: "/collaboration" },
     ],
   },
 ];
@@ -282,17 +293,6 @@ export default function MenuBarClient({
         );
       })}
 
-      <Button
-        variant={isActive("/ai-assistant") ? "secondary" : "ghost"}
-        className="flex items-center justify-start gap-3"
-        title="AI助手"
-        asChild
-      >
-        <Link href="/ai-assistant">
-          <Bot />
-          <span className="hidden lg:inline">AI助手</span>
-        </Link>
-      </Button>
       <Button
         variant={isActive("/analytics") ? "secondary" : "ghost"}
         className="flex items-center justify-start gap-3"
