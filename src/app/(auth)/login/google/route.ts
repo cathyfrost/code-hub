@@ -11,6 +11,8 @@ export async function GET() {
     "email",
   ]);
 
+  url.searchParams.set("prompt", "select_account");
+
   const cookieStore = await cookies();
 
   cookieStore.set("state", state, {
