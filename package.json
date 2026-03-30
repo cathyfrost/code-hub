@@ -61,6 +61,7 @@
     "react-image-file-resizer": "^0.4.8",
     "react-intersection-observer": "^10.0.2",
     "react-linkify-it": "^2.0.0",
+    "react-resizable-panels": "^4.8.0",
     "react-syntax-highlighter": "^16.1.1",
     "recharts": "^3.8.1",
     "shiki": "^4.0.2",

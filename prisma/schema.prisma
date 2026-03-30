@@ -10,33 +10,38 @@ generator client {
 }
 
 model User {
-  id                    String             @id
-  username              String             @unique
-  displayName           String
-  email                 String?            @unique
-  passwordHash          String?
-  googleId              String?            @unique
-  avatarUrl             String?
-  bio                   String?
-  skillLevel            Int                @default(1)
-  interests             String[]           @default([])
-  points                Int                @default(10)
-  session               Session[]
-  posts                 Post[]
-  following             Follow[]           @relation("Following")
-  followers             Follow[]           @relation("Followers")
-  likes                 Like[]
-  bookmarks             Bookmark[]
-  comments              Comment[]
-  inlineComments        InlineComment[]
-  commentLikes          CommentLike[]
-  aiConversations       AiConversation[]
-  quizSubmissions       QuizSubmission[]
-  notebooks             Notebook[]
-  notebookFolders       NotebookFolder[]
-  receivedNotifications Notification[]     @relation("Recipient")
-  issuedNotifications   Notification[]     @relation("Issuer")
-  pointTransactions     PointTransaction[]
+  id                     String                @id
+  username               String                @unique
+  displayName            String
+  email                  String?               @unique
+  passwordHash           String?
+  googleId               String?               @unique
+  avatarUrl              String?
+  bio                    String?
+  skillLevel             Int                   @default(1)
+  interests              String[]              @default([])
+  points                 Int                   @default(10)
+  session                Session[]
+  posts                  Post[]
+  following              Follow[]              @relation("Following")
+  followers              Follow[]              @relation("Followers")
+  likes                  Like[]
+  bookmarks              Bookmark[]
+  comments               Comment[]
+  inlineComments         InlineComment[]
+  commentLikes           CommentLike[]
+  aiConversations        AiConversation[]
+  quizSubmissions        QuizSubmission[]
+  notebooks              Notebook[]
+  notebookFolders        NotebookFolder[]
+  receivedNotifications  Notification[]        @relation("Recipient")
+  issuedNotifications    Notification[]        @relation("Issuer")
+  pointTransactions      PointTransaction[]
+  contestRegistrations   ContestRegistration[]
+  contestSubmissions     ContestSubmission[]
+  challengesAsChallenger Challenge[]           @relation("ChallengerUser")
+  challengesAsOpponent   Challenge[]           @relation("OpponentUser")
+  challengeSubmissions   ChallengeSubmission[]
 
   createAt DateTime @default(now())
 
@@ -207,18 +212,21 @@ model AiMessage {
 }
 
 model Quiz {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  difficulty  String   @default("easy")
-  tags        String[] @default([])
-  examples    Json     @default("[]")
-  testCases   Json     @default("[]")
-  starterCode Json     @default("{}")
-  hints       String?
-  order       Int      @default(0)
+  id              String              @id @default(cuid())
+  title           String
+  description     String
+  difficulty      String              @default("easy")
+  tags            String[]            @default([])
+  examples        Json                @default("[]")
+  testCases       Json                @default("[]")
+  starterCode     Json                @default("{}")
+  hints           String?
+  order           Int                 @default(0)
 
-  submissions QuizSubmission[]
+  submissions        QuizSubmission[]
+  contestProblems    ContestProblem[]
+  contestSubmissions ContestSubmission[]
+  challenges         Challenge[]
 
   createAt DateTime @default(now())
   updateAt DateTime @updatedAt
@@ -319,4 +327,122 @@ model Notebook {
   updateAt DateTime @updatedAt
 
   @@map("notebooks")
+}
+
+model Contest {
+  id          String        @id @default(cuid())
+  title       String
+  description String        @default("")
+  startTime   DateTime
+  endTime     DateTime
+  status      ContestStatus @default(UPCOMING)
+
+  problems      ContestProblem[]
+  registrations ContestRegistration[]
+  submissions   ContestSubmission[]
+
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  @@map("contests")
+}
+
+enum ContestStatus {
+  UPCOMING
+  RUNNING
+  ENDED
+}
+
+model ContestProblem {
+  id        String  @id @default(cuid())
+  contestId String
+  contest   Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  order     Int     @default(0)
+  score     Int     @default(100)
+
+  @@unique([contestId, quizId])
+  @@map("contest_problems")
+}
+
+model ContestRegistration {
+  id        String  @id @default(cuid())
+  contestId String
+  contest   Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createAt DateTime @default(now())
+
+  @@unique([contestId, userId])
+  @@map("contest_registrations")
+}
+
+model ContestSubmission {
+  id        String  @id @default(cuid())
+  contestId String
+  contest   Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  code      String
+  language  String
+  passed    Boolean @default(false)
+  penalty   Int     @default(0)
+  time      Float?
+  memory    Float?
+
+  createAt DateTime @default(now())
+
+  @@map("contest_submissions")
+}
+
+// ── 1v1 对战 ──
+
+model Challenge {
+  id           String          @id @default(cuid())
+  difficulty   String          @default("EASY")
+  quizId       String?
+  quiz         Quiz?           @relation(fields: [quizId], references: [id], onDelete: SetNull)
+  status       ChallengeStatus @default(MATCHING)
+  timeLimit    Int             @default(900)
+  challengerId String
+  challenger   User            @relation("ChallengerUser", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponentId   String?
+  opponent     User?           @relation("OpponentUser", fields: [opponentId], references: [id], onDelete: SetNull)
+  winnerId     String?
+  startedAt    DateTime?
+  endedAt      DateTime?
+
+  submissions ChallengeSubmission[]
+
+  createAt DateTime @default(now())
+
+  @@map("challenges")
+}
+
+enum ChallengeStatus {
+  MATCHING
+  ONGOING
+  FINISHED
+  CANCELLED
+}
+
+model ChallengeSubmission {
+  id          String    @id @default(cuid())
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String
+  language    String
+  passed      Boolean   @default(false)
+  time        Float?
+  memory      Float?
+
+  createAt DateTime @default(now())
+
+  @@map("challenge_submissions")
 }
