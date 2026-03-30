@@ -1,4 +1,3 @@
-import kyInstance from "@/lib/ky";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { google, lucia } from "@/auth";
@@ -31,13 +30,22 @@ export async function GET(req: NextRequest) {
       storedCodeVerifier,
     );
 
-    const googleUser = await kyInstance
-      .get("https://www.googleapis.com/oauth2/v1/userinfo", {
+    const accessToken = tokens.accessToken();
+
+    const response = await fetch(
+      "https://www.googleapis.com/oauth2/v1/userinfo",
+      {
         headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
-      })
-      .json<{ id: string; name: string }>();
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch Google user info");
+    }
+
+    const googleUser: { id: string; name: string } = await response.json();
 
     const existingUser = await prisma.user.findUnique({
       where: {
