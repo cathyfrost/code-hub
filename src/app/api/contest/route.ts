@@ -2,6 +2,13 @@ import { validateRequest } from "@/auth";
 import prisma from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
+function computeStatus(startTime: Date, endTime: Date): "UPCOMING" | "RUNNING" | "ENDED" {
+  const now = new Date();
+  if (now < startTime) return "UPCOMING";
+  if (now > endTime) return "ENDED";
+  return "RUNNING";
+}
+
 // GET /api/contest — 获取竞赛列表
 export async function GET() {
   try {
@@ -36,6 +43,7 @@ export async function GET() {
 
     const data = contests.map((c) => ({
       ...c,
+      status: computeStatus(c.startTime, c.endTime),
       isRegistered: c.registrations.length > 0,
       registrations: undefined,
     }));

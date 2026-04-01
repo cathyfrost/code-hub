@@ -22,6 +22,7 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
 
 # debug
@@ -29,7 +30,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# env files (can opt-in for commiting if needed)
+# env files (can opt-in for committing if needed)
 .env*
 
 # vercel
@@ -39,4 +40,26 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# generated files
 /src/generated/prisma
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python environments / temp
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ml-service: ignore everything except .py and .ipynb
+/ml-service/**
+!/ml-service/
+!/ml-service/**/
+!/ml-service/**/*.py
+!/ml-service/**/*.ipynb

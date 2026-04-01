@@ -11,5 +11,11 @@ export default async function Page({
   params: Promise<{ contestId: string }>;
 }) {
   const { contestId } = await params;
-  return <ContestArena contestId={contestId} />;
+  return (
+    <div className="fixed inset-0 top-[4.25rem] z-10 bg-background">
+      <div className="h-full p-3">
+        <ContestArena contestId={contestId} />
+      </div>
+    </div>
+  );
 }

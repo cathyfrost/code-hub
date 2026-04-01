@@ -42,6 +42,7 @@ model User {
   challengesAsChallenger Challenge[]           @relation("ChallengerUser")
   challengesAsOpponent   Challenge[]           @relation("OpponentUser")
   challengeSubmissions   ChallengeSubmission[]
+  postTags               PostTag[]
 
   createAt DateTime @default(now())
 
@@ -91,8 +92,11 @@ model Post {
   acceptedComment     Comment?        @relation("AcceptedAnswer", fields: [acceptedCommentId], references: [id], onDelete: SetNull)
   viewCount           Int             @default(0)
   updateAt            DateTime        @default(now()) @updatedAt
+  isJunk              Boolean         @default(false) // 垃圾内容标记
+  clusterId           Int? // K-Means 簇编号
 
-  createAt DateTime @default(now())
+  createAt DateTime  @default(now())
+  postTags PostTag[]
 
   @@map("posts")
 }
@@ -212,16 +216,16 @@ model AiMessage {
 }
 
 model Quiz {
-  id              String              @id @default(cuid())
-  title           String
-  description     String
-  difficulty      String              @default("easy")
-  tags            String[]            @default([])
-  examples        Json                @default("[]")
-  testCases       Json                @default("[]")
-  starterCode     Json                @default("{}")
-  hints           String?
-  order           Int                 @default(0)
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  difficulty  String   @default("easy")
+  tags        String[] @default([])
+  examples    Json     @default("[]")
+  testCases   Json     @default("[]")
+  starterCode Json     @default("{}")
+  hints       String?
+  order       Int      @default(0)
 
   submissions        QuizSubmission[]
   contestProblems    ContestProblem[]
@@ -445,4 +449,37 @@ model ChallengeSubmission {
   createAt DateTime @default(now())
 
   @@map("challenge_submissions")
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique // "React", "数据库", "Docker" 等
+  slug  String    @unique // "react", "database", "docker"
+  posts PostTag[]
+
+  createAt DateTime @default(now())
+
+  @@map("tags")
+}
+
+model PostTag {
+  id         String    @id @default(cuid())
+  postId     String
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  confidence Float     @default(0) // 算法置信度 0~1
+  source     TagSource @default(AUTO) // 来源
+
+  createAt DateTime @default(now())
+  user     User?    @relation(fields: [userId], references: [id])
+  userId   String?
+
+  @@unique([postId, tagId])
+  @@map("post_tags")
+}
+
+enum TagSource {
+  AUTO // 算法自动标注
+  MANUAL // 用户手动添加
 }

@@ -52,19 +52,17 @@ interface ChallengeData {
   } | null;
 }
 
-// 优化了配置项，加入了更丰富的颜色变量和对应的图标
-const DIFFICULTY_CONFIG: Record<
-  Difficulty,
-  {
-    label: string;
-    time: string;
-    color: string;
-    bg: string;
-    border: string;
-    activeBorder: string;
-    icon: React.ElementType;
-  }
-> = {
+type DifficultyConfig = {
+  label: string;
+  time: string;
+  color: string;
+  bg: string;
+  border: string;
+  activeBorder: string;
+  icon: typeof Zap;
+};
+
+const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
   EASY: {
     label: "简单",
     time: "15 分钟",
@@ -104,13 +102,11 @@ export default function ChallengePanel() {
     useState<Difficulty>("EASY");
   const [matchingId, setMatchingId] = useState<string | null>(null);
 
-  // 获取历史对战
   const { data: challenges, isLoading } = useQuery({
     queryKey: ["challenges"],
     queryFn: () => kyInstance.get("/api/challenge").json<ChallengeData[]>(),
   });
 
-  // 轮询匹配状态
   const { data: matchStatus } = useQuery({
     queryKey: ["challenge-status", matchingId],
     queryFn: () =>
@@ -119,12 +115,10 @@ export default function ChallengePanel() {
     refetchInterval: 2000,
   });
 
-  // 匹配成功后跳转
   if (matchStatus?.status === "ONGOING" && matchingId) {
     router.push(`/contest/challenge/${matchingId}`);
   }
 
-  // 发起匹配
   const matchMutation = useMutation({
     mutationFn: (difficulty: Difficulty) =>
       kyInstance
@@ -143,7 +137,6 @@ export default function ChallengePanel() {
     },
   });
 
-  // 取消匹配
   const cancelMutation = useMutation({
     mutationFn: (challengeId: string) =>
       kyInstance.post(`/api/challenge/${challengeId}/cancel`).json(),
@@ -158,26 +151,24 @@ export default function ChallengePanel() {
     <div className="mx-auto w-full max-w-4xl space-y-6">
       {/* 竞技场顶部卡片 */}
       <div className="relative overflow-hidden rounded-3xl border bg-card p-8 shadow-sm transition-all">
-        {/* 背景装饰图案 */}
         <div className="pointer-events-none absolute -right-10 -top-10 opacity-5">
           <Swords className="size-64" />
         </div>
 
         <div className="relative z-10 flex flex-col items-center">
-          <div className="mb-2 flex items-center justify-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-primary">
-            <Swords className="size-4" />
-            <span className="text-sm font-bold tracking-wider">竞技场 1V1</span>
+          <div className="mb-2 flex items-center justify-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-primary">
+            <Swords className="size-3.5" />
+            <span className="text-xs font-bold tracking-wider">竞技场 1V1</span>
           </div>
-          <h2 className="mb-2 text-3xl font-extrabold tracking-tight">
+          <h2 className="mb-1.5 text-xl font-extrabold tracking-tight">
             算法对决
           </h2>
-          <p className="mb-8 text-center text-muted-foreground">
+          <p className="mb-6 text-center text-sm text-muted-foreground">
             选择合适的难度，系统将为你匹配对手。率先通过所有测试用例者胜！
           </p>
 
           {!matchingId ? (
             <div className="w-full max-w-2xl space-y-8">
-              {/* 难度选择器 */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {(
                   Object.entries(DIFFICULTY_CONFIG) as [
@@ -192,7 +183,7 @@ export default function ChallengePanel() {
                       key={key}
                       onClick={() => setSelectedDifficulty(key)}
                       className={cn(
-                        "group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 p-5 transition-all duration-200",
+                        "group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 p-4 transition-all duration-200",
                         "hover:shadow-md",
                         isSelected
                           ? cn(config.activeBorder, config.bg, "ring-4")
@@ -205,12 +196,12 @@ export default function ChallengePanel() {
                           isSelected ? "bg-background" : config.bg,
                         )}
                       >
-                        <Icon className={cn("size-6", config.color)} />
+                        <Icon className={cn("size-4", config.color)} />
                       </div>
                       <div className="space-y-1 text-center">
                         <div
                           className={cn(
-                            "font-bold tracking-wide",
+                            "text-sm font-semibold",
                             isSelected
                               ? "text-foreground"
                               : "text-muted-foreground",
@@ -219,7 +210,7 @@ export default function ChallengePanel() {
                           {config.label}
                         </div>
                         <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                          <Clock className="size-3.5" />
+                          <Clock className="size-3" />
                           {config.time}
                         </div>
                       </div>
@@ -228,25 +219,23 @@ export default function ChallengePanel() {
                 })}
               </div>
 
-              {/* 匹配按钮 */}
               <div className="flex justify-center">
                 <Button
                   size="lg"
-                  className="h-14 w-full max-w-sm rounded-full text-lg font-bold shadow-lg transition-transform hover:scale-105 active:scale-95"
+                  className="h-11 w-full max-w-xs rounded-full text-sm font-bold shadow-lg transition-transform hover:scale-105 active:scale-95"
                   onClick={() => matchMutation.mutate(selectedDifficulty)}
                   disabled={matchMutation.isPending}
                 >
                   {matchMutation.isPending ? (
-                    <Loader2 className="mr-2 size-5 animate-spin" />
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
                   ) : (
-                    <Swords className="mr-2 size-5" />
+                    <Swords className="mr-1.5 size-4" />
                   )}
                   开始寻找对手
                 </Button>
               </div>
             </div>
           ) : (
-            /* 匹配中状态 UI */
             <div className="flex w-full flex-col items-center justify-center py-10">
               <div className="relative mb-8 flex items-center justify-center">
                 <div className="absolute size-32 animate-ping rounded-full bg-primary/20" />
@@ -308,7 +297,7 @@ export default function ChallengePanel() {
                 const isDraw =
                   challenge.status === "FINISHED" && !challenge.winnerId;
                 const isOngoing = challenge.status === "ONGOING";
-                
+
                 const opponent =
                   challenge.challenger.id === user.id
                     ? challenge.opponent
@@ -319,19 +308,17 @@ export default function ChallengePanel() {
                     key={challenge.id}
                     className="group flex flex-col justify-between gap-4 rounded-2xl border bg-card/50 p-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center"
                   >
-                    {/* 左侧：对手信息 & 题目 */}
                     <div className="flex items-center gap-4">
                       <div className="relative">
                         <UserAvatar
                           avatarUrl={opponent?.avatarUrl || null}
                           size={46}
                         />
-                        {/* 等待中的小点 */}
                         {challenge.status === "MATCHING" && (
                           <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-background bg-yellow-500" />
                         )}
                       </div>
-                      
+
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground">vs</span>
@@ -358,9 +345,7 @@ export default function ChallengePanel() {
                       </div>
                     </div>
 
-                    {/* 右侧：状态 & 操作 */}
-                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t pt-3 sm:border-0 sm:pt-0">
-                      {/* 难度 Badge */}
+                    <div className="flex items-center justify-between gap-4 border-t pt-3 sm:justify-end sm:border-0 sm:pt-0">
                       <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                         {
                           DIFFICULTY_CONFIG[
@@ -369,7 +354,6 @@ export default function ChallengePanel() {
                         }
                       </span>
 
-                      {/* 状态展示 */}
                       <div className="min-w-[80px] text-right">
                         {challenge.status === "FINISHED" && (
                           <div
