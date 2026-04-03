@@ -12,7 +12,8 @@ import {
   ChevronDown,
   Bell,
   Mail,
-  Users,
+  Trophy,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import kyInstance from "@/lib/ky";
 import { cn } from "@/lib/utils";
 import type { NotificationCountInfo, MessageCountInfo } from "@/lib/types";
+import { useSession } from "@/app/(main)/SessionProvider";
 
 interface MenuBarClientProps {
   className?: string;
@@ -41,6 +43,7 @@ interface MenuGroup {
   children: SubMenuItem[];
 }
 
+// 修改后的菜单组：移除了社区活动
 const menuGroups: MenuGroup[] = [
   {
     key: "content",
@@ -61,15 +64,6 @@ const menuGroups: MenuGroup[] = [
       { title: "AI助手", href: "/ai-assistant" },
     ],
   },
-  {
-    key: "community",
-    title: "社区活动",
-    icon: <Users />,
-    children: [
-      { title: "算法竞赛", href: "/contest" },
-      { title: "编程协作", href: "/collaboration" },
-    ],
-  },
 ];
 
 export default function MenuBarClient({
@@ -78,6 +72,7 @@ export default function MenuBarClient({
   unreadMessagesCount,
 }: MenuBarClientProps) {
   const pathname = usePathname();
+  const { user } = useSession();
 
   // 实时轮询未读数
   const { data: notifData } = useQuery({
@@ -119,7 +114,7 @@ export default function MenuBarClient({
   const isGroupActive = (group: MenuGroup) =>
     group.children.some((child) => isActive(child.href));
 
-  // ── 移动端底栏：检测是否为移动端布局 ──
+  // ── 移动端底栏 ──
   const isMobile = className?.includes("sm:hidden");
 
   if (isMobile) {
@@ -137,7 +132,7 @@ export default function MenuBarClient({
         title: "聊天",
         badge: msgData.unreadCount,
       },
-      { href: "/questions", icon: CircleHelp, title: "问答", badge: 0 },
+      { href: "/contest", icon: Trophy, title: "竞赛", badge: 0 }, // 移动端也同步添加竞赛
       { href: "/ai-assistant", icon: Bot, title: "AI", badge: 0 },
     ];
 
@@ -170,7 +165,7 @@ export default function MenuBarClient({
     );
   }
 
-  // ── 桌面端侧边栏：手风琴菜单 ──
+  // ── 桌面端侧边栏 ──
   return (
     <div className={className}>
       <Button
@@ -235,6 +230,19 @@ export default function MenuBarClient({
         </Link>
       </Button>
 
+      {/* 算法竞赛：现在作为一级菜单独立出来 */}
+      <Button
+        variant={isActive("/contest") ? "secondary" : "ghost"}
+        className="flex items-center justify-start gap-3"
+        title="算法竞赛"
+        asChild
+      >
+        <Link href="/contest">
+          <Trophy />
+          <span className="hidden lg:inline">算法竞赛</span>
+        </Link>
+      </Button>
+
       {menuGroups.map((group) => {
         const isExpanded = expandedGroup === group.key;
         const groupActive = isGroupActive(group);
@@ -261,7 +269,6 @@ export default function MenuBarClient({
               />
             </Button>
 
-            {/* 子菜单（带动画） */}
             <div
               className={cn(
                 "hidden overflow-hidden transition-all duration-200 ease-in-out lg:grid",
@@ -304,6 +311,19 @@ export default function MenuBarClient({
           <span className="hidden lg:inline">数据分析</span>
         </Link>
       </Button>
+      {user.role === "ADMIN" && (
+        <Button
+          variant={isActive("/admin") ? "secondary" : "ghost"}
+          className="flex items-center justify-start gap-3"
+          title="管理后台"
+          asChild
+        >
+          <Link href="/admin">
+            <Shield />
+            <span className="hidden lg:inline">管理后台</span>
+          </Link>
+        </Button>
+      )}
     </div>
   );
 }

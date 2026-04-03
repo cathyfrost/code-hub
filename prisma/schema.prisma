@@ -21,6 +21,8 @@ model User {
   skillLevel             Int                   @default(1)
   interests              String[]              @default([])
   points                 Int                   @default(10)
+  role                   String                @default("USER") // "USER" | "ADMIN"
+  banned                 Boolean               @default(false)
   session                Session[]
   posts                  Post[]
   following              Follow[]              @relation("Following")
