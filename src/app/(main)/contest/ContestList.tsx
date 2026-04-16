@@ -4,11 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import kyInstance from "@/lib/ky";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import {
-  Loader2,
-  ChevronRight,
-  Crown,
-} from "lucide-react";
+import { Loader2, ChevronRight, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
@@ -93,7 +89,8 @@ export default function ContestList() {
 
   const { data: rankings } = useQuery({
     queryKey: ["contest-rankings"],
-    queryFn: () => kyInstance.get("/api/contest/rankings").json<RankingUser[]>(),
+    queryFn: () =>
+      kyInstance.get("/api/contest/rankings").json<RankingUser[]>(),
   });
 
   const registerMutation = useMutation({
@@ -257,11 +254,9 @@ export default function ContestList() {
                   <div className="min-w-0 flex-1">
                     <h3 className="text-[15px] font-bold">{contest.title}</h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {format(
-                        new Date(contest.startTime),
-                        "M月d日 EEE HH:mm",
-                        { locale: zhCN },
-                      )}
+                      {format(new Date(contest.startTime), "M月d日 EEE HH:mm", {
+                        locale: zhCN,
+                      })}
                     </p>
                   </div>
 
@@ -285,9 +280,7 @@ export default function ContestList() {
                             size="sm"
                             variant="outline"
                             className="rounded-full text-xs"
-                            onClick={() =>
-                              registerMutation.mutate(contest.id)
-                            }
+                            onClick={() => registerMutation.mutate(contest.id)}
                             disabled={registerMutation.isPending}
                           >
                             {registerMutation.isPending ? (
@@ -300,7 +293,7 @@ export default function ContestList() {
                       </>
                     )}
                     {contest.status === "RUNNING" &&
-                      contest.isRegistered && (
+                      (contest.isRegistered ? (
                         <Button
                           size="sm"
                           className="rounded-full text-xs"
@@ -311,7 +304,21 @@ export default function ContestList() {
                             <ChevronRight className="ml-0.5 size-3.5" />
                           </Link>
                         </Button>
-                      )}
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full text-xs"
+                          onClick={() => registerMutation.mutate(contest.id)}
+                          disabled={registerMutation.isPending}
+                        >
+                          {registerMutation.isPending ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            "报名"
+                          )}
+                        </Button>
+                      ))}
                     {contest.status === "ENDED" && (
                       <div className="flex gap-1.5">
                         <Button
@@ -320,9 +327,7 @@ export default function ContestList() {
                           className="rounded-full text-xs"
                           asChild
                         >
-                          <Link
-                            href={`/contest/${contest.id}/leaderboard`}
-                          >
+                          <Link href={`/contest/${contest.id}/leaderboard`}>
                             排行榜
                           </Link>
                         </Button>

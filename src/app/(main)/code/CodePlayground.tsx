@@ -20,7 +20,6 @@ import {
   Sparkles,
   Clock,
   HardDrive,
-  MessageSquare,
   FileEdit,
   PenTool,
   X,
@@ -546,14 +545,14 @@ export default function CodePlayground() {
                       <FileEdit className="h-3.5 w-3.5" />
                       分享到帖子
                     </button>
-                    <button
+                    {/* <button
                       disabled
                       className="flex w-full cursor-not-allowed items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                       分享到聊天室
                       <span className="ml-auto text-[10px]">即将上线</span>
-                    </button>
+                    </button> */}
                   </div>
                 )}
               </div>

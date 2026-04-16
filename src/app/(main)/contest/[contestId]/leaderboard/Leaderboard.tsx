@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import kyInstance from "@/lib/ky";
-import { Loader2, Trophy, ArrowLeft, Clock, Medal, Crown } from "lucide-react";
+import { Loader2, Trophy, ArrowLeft, Medal, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import UserAvatar from "@/components/UserAvatar";
@@ -77,7 +77,7 @@ export default function Leaderboard({ contestId }: { contestId: string }) {
                         )}
                       </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">
-                        {top3[1].solvedCount} 题 · {top3[1].totalPenalty}min
+                        {top3[1].solvedCount} 题
                       </div>
                       <div className="mt-2 flex h-16 w-20 items-center justify-center rounded-t-lg bg-gray-300/20 dark:bg-gray-600/20">
                         <Medal className="size-6 text-gray-400" />
@@ -143,10 +143,7 @@ export default function Leaderboard({ contestId }: { contestId: string }) {
                   <span className="w-12 text-center">排名</span>
                   <span className="flex-1">用户</span>
                   <span className="w-20 text-center">通过题数</span>
-                  <span className="flex w-24 items-center justify-center gap-1">
-                    <Clock className="size-3" />
-                    罚时
-                  </span>
+                  
                 </div>
 
                 <div className="divide-y">

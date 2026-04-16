@@ -202,6 +202,7 @@ function PassedDetail({
   const hours = Math.floor(elapsed / 3600000);
   const minutes = Math.floor((elapsed % 3600000) / 60000);
   const seconds = Math.floor((elapsed % 60000) / 1000);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const elapsedStr = `${hours > 0 ? `${hours}h ` : ""}${minutes}m ${seconds}s`;
 
   // 总执行时间
@@ -234,7 +235,7 @@ function PassedDetail({
           <span className="text-2xl font-extrabold text-emerald-500">通过</span>
         </div>
         <div className="mb-1 text-sm text-muted-foreground">
-          {passedCases} / {totalCases} 个通过的测试用例 · 用时: {elapsedStr}
+          {passedCases} / {totalCases} 个通过的测试用例
         </div>
         <div className="mb-5 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-medium">{user.displayName}</span>
@@ -644,21 +645,7 @@ export default function ContestArena({ contestId }: { contestId: string }) {
               <FileText className="h-3 w-3" />
               题目描述
             </button>
-            <button
-              onClick={() => {
-                setLeftTab("solutions");
-                setShowPassedDetail(false);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                leftTab === "solutions"
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Lightbulb className="h-3 w-3" />
-              题解
-            </button>
+            
             <button
               onClick={() => {
                 setLeftTab("submissions");
@@ -812,13 +799,7 @@ export default function ContestArena({ contestId }: { contestId: string }) {
             </div>
           )}
 
-          {/* ── 题解（占位） ── */}
-          {leftTab === "solutions" && !showPassedDetail && (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Lightbulb className="h-8 w-8 opacity-20" />
-              <p className="text-sm">题解功能即将上线</p>
-            </div>
-          )}
+         
 
           {/* ── 提交记录 ── */}
           {leftTab === "submissions" && !showPassedDetail && (
@@ -1025,11 +1006,7 @@ export default function ContestArena({ contestId }: { contestId: string }) {
                       {submitResult.results.filter((r) => r.passed).length}/
                       {submitResult.results.length} 通过
                     </span>
-                    {submitResult.allPassed && (
-                      <span className="text-muted-foreground">
-                        罚时 {submitResult.penalty} 分钟
-                      </span>
-                    )}
+                    
                   </div>
                 )}
               </div>
@@ -1061,7 +1038,7 @@ export default function ContestArena({ contestId }: { contestId: string }) {
                       <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-center">
                         <Trophy className="mx-auto h-6 w-6 text-emerald-500" />
                         <p className="text-sm font-semibold text-emerald-500">
-                          恭喜！全部通过！罚时 {submitResult.penalty} 分钟
+                          恭喜！全部通过！
                         </p>
                       </div>
                     )}

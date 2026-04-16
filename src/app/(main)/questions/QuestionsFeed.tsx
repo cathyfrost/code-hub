@@ -142,7 +142,7 @@ export default function QuestionsFeed() {
             <QuestionItem
               key={post.id}
               post={post}
-              onTagClick={(tag) => setActiveTag(tag)}
+              // onTagClick={(tag) => setActiveTag(tag)}
             />
           ))}
           {isFetchingNextPage && (
