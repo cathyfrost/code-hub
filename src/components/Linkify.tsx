@@ -7,12 +7,12 @@ interface LinkifyProps {
 }
 
 export default function Linkify({ children }: LinkifyProps) {
-  return(
-  <LinkifyUsername>
-    <LinkifyHashtag>
-      <LinkifyUrl>{children}</LinkifyUrl>
-    </LinkifyHashtag>
-  </LinkifyUsername>
+  return (
+    <LinkifyUsername>
+      <LinkifyHashtag>
+        <LinkifyUrl>{children}</LinkifyUrl>
+      </LinkifyHashtag>
+    </LinkifyUsername>
   );
 }
 
@@ -37,17 +37,21 @@ function LinkifyUsername({ children }: LinkifyProps) {
   );
 }
 
-function LinkifyHashtag({children}: LinkifyProps){
-    return <LinkIt
-    regex={/(#[\w\u4e00-\u9fff][\w\u4e00-\u9fff.]*)/}
-    component={(match, key)=>(
-        <Link key={key} href={`/hashtag/${match.slice(1)}`}
-        className="text-primary hover:underline"
+function LinkifyHashtag({ children }: LinkifyProps) {
+  return (
+    <LinkIt
+      regex={/(#[\w\u4e00-\u9fff][\w\u4e00-\u9fff.]*)/}
+      component={(match, key) => (
+        <Link
+          key={key}
+          href={`/search?q=${encodeURIComponent(match)}`}
+          className="text-primary hover:underline"
         >
-            {match}
+          {match}
         </Link>
-    )}
+      )}
     >
-    {children}
+      {children}
     </LinkIt>
+  );
 }

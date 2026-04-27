@@ -196,24 +196,20 @@ async function TrendingTopics() {
         <h3 className="text-sm font-bold text-muted-foreground">热门话题</h3>
       </div>
       <div className="space-y-0.5 px-2 pb-3">
-        {TrendingTopics.map(({ hashtag, count }) => {
-          const title = hashtag.split("#")[1];
-
-          return (
-            <Link
-              key={title}
-              href={`/hashtag/${title}`}
-              className="block rounded-lg px-2 py-2 transition-colors hover:bg-accent"
-            >
-              <p className="truncate text-sm font-semibold" title={hashtag}>
-                {hashtag}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {formatNumber(count)} 篇帖子
-              </p>
-            </Link>
-          );
-        })}
+        {TrendingTopics.map(({ hashtag, count }) => (
+          <Link
+            key={hashtag}
+            href={`/search?q=${encodeURIComponent(hashtag)}`}
+            className="block rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+          >
+            <p className="truncate text-sm font-semibold" title={hashtag}>
+              {hashtag}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatNumber(count)} 篇帖子
+            </p>
+          </Link>
+        ))}
       </div>
     </div>
   );
