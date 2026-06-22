@@ -35,7 +35,7 @@
 | 笔记系统 | Markdown 笔记、文件夹分类、标签、Pin 功能 |
 | 实时消息 | 基于 Stream Chat 的私信、群聊、代码片段分享 |
 | 通知中心 | 点赞 / 评论 / 关注 / 悬赏采纳事件提醒 |
-| 智能标签 | Python ML 服务：TF-IDF + KMeans + 同义词映射自动打标 |
+| 智能标签 | Python ML 服务：垃圾过滤分类器 + TF-IDF + SVD 降维 + KMeans 聚类 + 同义词映射自动打标 |
 | 用户体系 | Lucia Auth + Google OAuth + 技能等级 LV1~LV5 + 积分签到 |
 | 管理后台 | 用户 / 帖子 / 评论 / 竞赛管理（仅 ADMIN） |
 
@@ -55,7 +55,7 @@
 
 **ML 微服务**
 
-- [FastAPI](https://fastapi.tiangolo.com/) + scikit-learn (TF-IDF / KMeans) + joblib
+- [FastAPI](https://fastapi.tiangolo.com/) + scikit-learn (TF-IDF / 分类器 / SVD / KMeans) + joblib
 
 **外部服务**
 
@@ -81,7 +81,7 @@ code-hub/
 │   └── schema.prisma         # 20+ 数据模型
 ├── ml-service/               # Python 智能标签服务
 │   ├── main.py               # FastAPI 入口
-│   ├── training/             # 模型训练脚本
+│   ├── training_v2/          # 模型训练流水线（编号脚本 + run_all.sh）
 │   ├── models/               # 已训练模型文件（pkl）
 │   └── requirements.txt
 ├── scripts/                  # 数据库种子 / 维护脚本（tsx 执行）
@@ -226,11 +226,17 @@ uvicorn main:app --reload --port 8000
 
 访问 `http://localhost:8000/docs` 查看交互式 API 文档。
 
-如需重新训练模型：
+如需重新训练模型，训练流水线在 `training_v2/`（预处理 → 垃圾/技术二分类 → SVD 降维 + KMeans 聚类 → 评估）：
 
 ```bash
-# 在 ml-service 目录下
-python training/train.py        # 见 training/ 内具体脚本
+# 在 ml-service 目录下，一键跑完整流水线
+bash training_v2/run_all.sh
+
+# 或按编号单步执行
+python training_v2/02_preprocess.py              # 预处理
+python training_v2/03_train_junk_classifier.py   # 垃圾过滤分类器（NB / LogReg / LinearSVC 选最优）
+python training_v2/04_train_kmeans.py            # 仅技术帖 TF-IDF + SVD + KMeans 聚类
+python training_v2/05_evaluate.py               # 端到端评估 + 图表
 ```
 
 ---
