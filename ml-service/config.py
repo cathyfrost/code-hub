@@ -33,24 +33,25 @@ CLUSTER_LABELS_FILE = MODELS_DIR / "cluster_labels.json"
 FIGURES_DIR = BASE_DIR / "outputs" / "figures"
 
 # ── 模型超参数 ──
+# 以下参数未被训练脚本引用（training_v2 硬编码了各自的值），暂作保留备用
 # TF-IDF
-TFIDF_MAX_FEATURES = 5000
-TFIDF_MAX_DF = 0.85
-TFIDF_MIN_DF = 2
-TFIDF_NGRAM_RANGE = (1, 2)
+# TFIDF_MAX_FEATURES = 5000
+# TFIDF_MAX_DF = 0.85
+# TFIDF_MIN_DF = 2
+# TFIDF_NGRAM_RANGE = (1, 2)
 
 # K-Means
-KMEANS_K_RANGE = range(2, 21)     # 肘部法则搜索范围
-KMEANS_N_INIT = 10
-KMEANS_MAX_ITER = 300
-KMEANS_RANDOM_STATE = 42
+# KMEANS_K_RANGE = range(2, 21)     # 肘部法则搜索范围
+# KMEANS_N_INIT = 10
+# KMEANS_MAX_ITER = 300
+# KMEANS_RANDOM_STATE = 42
 
 # 垃圾分类器
-JUNK_NB_ALPHA = 1.0               # 朴素贝叶斯拉普拉斯平滑
-
-# 推理阈值
-JUNK_CONFIDENCE_THRESHOLD = 0.8   # 垃圾概率 > 此值判定为垃圾
+# JUNK_NB_ALPHA = 1.0               # 朴素贝叶斯拉普拉斯平滑
 
 # 数据集划分
-TEST_SIZE = 0.2
-RANDOM_STATE = 42
+# TEST_SIZE = 0.2
+# RANDOM_STATE = 42
+
+# 推理阈值（main.py 在用）
+JUNK_CONFIDENCE_THRESHOLD = 0.8   # 垃圾概率 > 此值判定为垃圾

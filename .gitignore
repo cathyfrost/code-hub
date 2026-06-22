@@ -63,3 +63,7 @@ env/
 !/ml-service/**/
 !/ml-service/**/*.py
 !/ml-service/**/*.ipynb
+
+# ...but never the virtualenv, even though it is full of .py files (too large)
+/ml-service/.venv/**
+/ml-service/.venv/

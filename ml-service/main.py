@@ -1,55 +1,79 @@
 """
-CodeHub 智能标签 FastAPI 推理服务 v2
+CodeHub 智能标签 FastAPI 推理服务 v3
+=====================================
+两阶段推理流水线（升级自 v2）：
 
-标签生成策略：
-  1. TF-IDF 关键词 → 同义词映射 → 标签
-  2. 原文直接正则匹配技术实体词 → 标签
-  两路合并去重，保证不遗漏
+  Stage A (垃圾过滤):
+    raw → preprocess → tfidf_vectorizer → junk_classifier
+    LinearSVC (Calibrated)，test acc 99.69%
+
+  Stage B (技术帖聚类) ── 仅对 is_junk=False 的样本执行:
+    raw → preprocess → tfidf_cluster → svd_pipeline → kmeans
+    K=18, Silhouette 0.21（旧版 0.0165）
+
+标签生成保持双路（原文正则 + TF-IDF 关键词），保证向后兼容。
+对外 API 契约不变：/predict, /batch-predict, /health。
 """
+from __future__ import annotations
 
+import json
+import os
+import re
+import time
+from typing import List, Optional
+
+import joblib
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import joblib
-import json
-import numpy as np
-import re
-import os
-import time
 
 from config import (
-    TFIDF_MODEL_FILE, KMEANS_MODEL_FILE, JUNK_CLF_MODEL_FILE,
-    CLUSTER_LABELS_FILE, JUNK_CONFIDENCE_THRESHOLD, TECH_SYNONYMS_FILE,
+    CLUSTER_LABELS_FILE,
+    JUNK_CLF_MODEL_FILE,
+    JUNK_CONFIDENCE_THRESHOLD,
+    KMEANS_MODEL_FILE,
+    MODELS_DIR,
+    TECH_SYNONYMS_FILE,
+    TFIDF_MODEL_FILE,
 )
 from utils.preprocessor import preprocess_to_string
-from utils.tag_mapper import load_cluster_labels, get_top_keywords
+from utils.tag_mapper import get_top_keywords, load_cluster_labels
+
+
+# 新增产物路径（两阶段架构）
+TFIDF_CLUSTER_FILE = os.path.join(str(MODELS_DIR), "tfidf_cluster.pkl")
+SVD_PIPELINE_FILE = os.path.join(str(MODELS_DIR), "svd_pipeline.pkl")
 
 
 # ══════════════════════════════════════════════
 #  模型加载
 # ══════════════════════════════════════════════
+print("加载模型...")
+_t0 = time.time()
 
-print("正在加载模型...")
-_start = time.time()
-
-vectorizer = joblib.load(str(TFIDF_MODEL_FILE))
-kmeans = joblib.load(str(KMEANS_MODEL_FILE))
+vectorizer = joblib.load(str(TFIDF_MODEL_FILE))          # 给垃圾分类器
 junk_clf = joblib.load(str(JUNK_CLF_MODEL_FILE))
-cluster_labels = load_cluster_labels()
 feature_names = vectorizer.get_feature_names_out()
 
-# 加载同义词映射表
-_synonyms = {}
+tfidf_cluster = joblib.load(TFIDF_CLUSTER_FILE)          # 给聚类
+svd_pipeline = joblib.load(SVD_PIPELINE_FILE)
+kmeans = joblib.load(str(KMEANS_MODEL_FILE))
+cluster_labels = load_cluster_labels()
+feature_names_cluster = tfidf_cluster.get_feature_names_out()
+centroids_svd = kmeans.cluster_centers_                  # 在 SVD 空间
+
+# 同义词表（双路标签）
+_synonyms: dict = {}
 _syn_path = str(TECH_SYNONYMS_FILE)
 if os.path.exists(_syn_path):
     with open(_syn_path, "r", encoding="utf-8") as f:
         _synonyms = json.load(f)
 _syn_lower = {k.lower(): v for k, v in _synonyms.items()}
 
-centroids = kmeans.cluster_centers_
-
-_load_time = time.time() - _start
-print(f"模型加载完成 ({_load_time:.2f}s)")
-print(f"  TF-IDF 词表: {len(feature_names)}")
+print(f"加载完成 ({time.time() - _t0:.2f}s)")
+print(f"  TF-IDF (junk path) 词表: {len(feature_names)}")
+print(f"  TF-IDF (cluster path) 词表: {len(feature_names_cluster)}")
+print(f"  SVD 维度: {kmeans.cluster_centers_.shape[1]}")
 print(f"  K-Means K={kmeans.n_clusters}")
 print(f"  分类器: {type(junk_clf).__name__}")
 print(f"  垃圾阈值: {JUNK_CONFIDENCE_THRESHOLD}")
@@ -57,45 +81,32 @@ print(f"  同义词表: {len(_synonyms)} 条")
 
 
 # ══════════════════════════════════════════════
-#  双路标签生成
+#  双路标签生成（保留 v2 逻辑，向后兼容）
 # ══════════════════════════════════════════════
-
-# 预编译：从同义词表构建「原文实体词 → 标准标签」的正则匹配器
-# 按长度倒序排列，优先匹配长词（如 "React Native" 优先于 "React"）
 _entity_patterns = sorted(_synonyms.keys(), key=len, reverse=True)
-_entity_regex = re.compile(
-    "|".join(re.escape(e) for e in _entity_patterns),
-    re.IGNORECASE
+_entity_regex = (
+    re.compile("|".join(re.escape(e) for e in _entity_patterns), re.IGNORECASE)
+    if _entity_patterns
+    else None
 )
 
 
-def extract_tags_from_raw_text(raw_text: str, max_tags: int = 5) -> list[str]:
-    """
-    路线 A：直接从原文中正则匹配技术实体词
-    不依赖 TF-IDF，不会被词频稀释
-    """
-    tags = []
-    seen = set()
-
-    matches = _entity_regex.findall(raw_text)
-    for match in matches:
-        standard_tag = _synonyms.get(match) or _syn_lower.get(match.lower())
-        if standard_tag and standard_tag not in seen:
-            seen.add(standard_tag)
-            tags.append(standard_tag)
+def extract_tags_from_raw_text(raw_text: str, max_tags: int = 5) -> list:
+    if _entity_regex is None:
+        return []
+    tags, seen = [], set()
+    for m in _entity_regex.findall(raw_text):
+        std = _synonyms.get(m) or _syn_lower.get(m.lower())
+        if std and std not in seen:
+            seen.add(std)
+            tags.append(std)
         if len(tags) >= max_tags:
             break
-
     return tags
 
 
-def extract_tags_from_keywords(keywords: list[str], max_tags: int = 5) -> list[str]:
-    """
-    路线 B：从 TF-IDF 关键词通过同义词映射生成标签
-    """
-    tags = []
-    seen = set()
-
+def extract_tags_from_keywords(keywords: list, max_tags: int = 5) -> list:
+    tags, seen = [], set()
     for kw in keywords:
         kw_lower = kw.lower().strip()
         if kw_lower in _syn_lower:
@@ -112,31 +123,27 @@ def extract_tags_from_keywords(keywords: list[str], max_tags: int = 5) -> list[s
                         tags.append(tag)
         if len(tags) >= max_tags:
             break
-
     return tags
 
 
-def merge_tags(tags_a: list[str], tags_b: list[str], max_tags: int = 5) -> list[str]:
-    """合并两路标签，去重，限制数量"""
-    seen = set()
-    merged = []
-    for tag in tags_a + tags_b:
-        if tag not in seen:
-            seen.add(tag)
-            merged.append(tag)
-        if len(merged) >= max_tags:
+def merge_tags(a: list, b: list, max_tags: int = 5) -> list:
+    seen, out = set(), []
+    for t in a + b:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+        if len(out) >= max_tags:
             break
-    return merged
+    return out
 
 
 # ══════════════════════════════════════════════
-#  FastAPI 应用
+#  FastAPI
 # ══════════════════════════════════════════════
-
 app = FastAPI(
     title="CodeHub 智能标签服务",
-    description="基于 TF-IDF + K-Means + NB 的帖子自动标签与垃圾过滤",
-    version="2.0.0",
+    description="两阶段流水线：LinearSVC 垃圾过滤 + TF-IDF/SVD/KMeans 技术聚类",
+    version="3.0.0",
 )
 
 
@@ -146,19 +153,19 @@ class PredictRequest(BaseModel):
 
 class PredictResponse(BaseModel):
     is_junk: bool
-    tags: list[str]
-    cluster_id: int | None
-    cluster_name: str | None
+    tags: List[str]
+    cluster_id: Optional[int] = None
+    cluster_name: Optional[str] = None
     confidence: float
-    keywords: list[str]
+    keywords: List[str]
 
 
 class BatchPredictRequest(BaseModel):
-    texts: list[str]
+    texts: List[str]
 
 
 class BatchPredictResponse(BaseModel):
-    results: list[PredictResponse]
+    results: List[PredictResponse]
 
 
 class HealthResponse(BaseModel):
@@ -171,7 +178,7 @@ class HealthResponse(BaseModel):
 
 
 def predict_single(text: str) -> PredictResponse:
-    """单条帖子的完整推理流程"""
+    """两阶段推理"""
 
     # 1. 预处理
     processed = preprocess_to_string(text)
@@ -181,52 +188,51 @@ def predict_single(text: str) -> PredictResponse:
             cluster_name=None, confidence=0.0, keywords=[],
         )
 
-    # 2. TF-IDF 向量化
+    # ── Stage A: 垃圾分类 ──
     vec = vectorizer.transform([processed])
 
-    # 3. 垃圾分类（概率阈值）
     is_junk = False
     junk_prob = 0.0
-
     if hasattr(junk_clf, "predict_proba"):
         proba = junk_clf.predict_proba(vec)[0]
-        junk_prob = proba[1] if len(proba) > 1 else 0.0
+        junk_prob = float(proba[1]) if len(proba) > 1 else 0.0
         is_junk = junk_prob > JUNK_CONFIDENCE_THRESHOLD
     else:
-        pred = junk_clf.predict(vec)[0]
-        is_junk = bool(pred == 1)
+        pred = int(junk_clf.predict(vec)[0])
+        is_junk = pred == 1
         junk_prob = 1.0 if is_junk else 0.0
 
-    # 4. 提取 TF-IDF 关键词
-    keywords = get_top_keywords(vec, feature_names, top_n=15)
-
-    # 5. 如果是垃圾，直接返回
+    # 垃圾帖直接返回（用 junk TF-IDF 抽 5 个关键词，供前端展示）
     if is_junk:
+        kw = get_top_keywords(vec, feature_names, top_n=5)
         return PredictResponse(
             is_junk=True, tags=[], cluster_id=None,
-            cluster_name=None, confidence=junk_prob, keywords=keywords[:5],
+            cluster_name=None, confidence=round(junk_prob, 4), keywords=kw,
         )
 
-    # 6. K-Means 聚类
-    cluster_id = int(kmeans.predict(vec)[0])
+    # ── Stage B: 技术帖聚类 ──
+    vec_c = tfidf_cluster.transform([processed])
+    vec_svd = svd_pipeline.transform(vec_c)
+    cluster_id = int(kmeans.predict(vec_svd)[0])
     cluster_info = cluster_labels.get(str(cluster_id), {})
     cluster_name = cluster_info.get("name", "未知")
 
-    # 7. 双路标签生成
-    tags_from_text = extract_tags_from_raw_text(text)       # 路线A：原文实体匹配
-    tags_from_kw = extract_tags_from_keywords(keywords)     # 路线B：TF-IDF关键词映射
-    tags = merge_tags(tags_from_text, tags_from_kw)
+    # 关键词从 cluster TF-IDF 抽（tech-only 词表，对技术帖更准）
+    keywords = get_top_keywords(vec_c, feature_names_cluster, top_n=15)
 
-    # 兜底：都没匹配到就用簇标签
+    # 双路标签生成 + 簇标签兜底
+    tags_a = extract_tags_from_raw_text(text)
+    tags_b = extract_tags_from_keywords(keywords)
+    tags = merge_tags(tags_a, tags_b)
     if not tags:
-        base_tags = cluster_info.get("tags", [])
-        tags = [t for t in base_tags if t != "非技术"][:3]
+        base = cluster_info.get("tags", [])
+        tags = [t for t in base if t != "非技术"][:3]
 
-    # 8. 置信度（softmax）
-    vec_dense = vec.toarray().flatten()
-    distances = [np.linalg.norm(vec_dense - centroids[j]) for j in range(kmeans.n_clusters)]
-    neg_distances = [-d for d in distances]
-    exp_neg = np.exp(neg_distances - np.max(neg_distances))
+    # 置信度：在 SVD 空间用 softmax(-distance)
+    flat = vec_svd.flatten()
+    distances = np.linalg.norm(centroids_svd - flat, axis=1)
+    neg = -distances
+    exp_neg = np.exp(neg - neg.max())
     softmax = exp_neg / exp_neg.sum()
     confidence = float(softmax[cluster_id])
 
@@ -253,7 +259,7 @@ async def batch_predict(req: BatchPredictRequest):
         raise HTTPException(status_code=400, detail="texts 不能为空")
     if len(req.texts) > 100:
         raise HTTPException(status_code=400, detail="单次最多 100 条")
-    results = [predict_single(text) for text in req.texts]
+    results = [predict_single(t) for t in req.texts]
     return BatchPredictResponse(results=results)
 
 
@@ -263,7 +269,7 @@ async def health():
         status="ok",
         models_loaded=True,
         vectorizer_features=len(feature_names),
-        kmeans_clusters=kmeans.n_clusters,
+        kmeans_clusters=int(kmeans.n_clusters),
         classifier_type=type(junk_clf).__name__,
         junk_threshold=JUNK_CONFIDENCE_THRESHOLD,
     )

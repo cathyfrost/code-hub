@@ -3,6 +3,7 @@
 职责：分词 → 去停用词 → 同义词归一化 → 输出干净词元
 训练和推理共用同一套流水线，保证特征一致性
 """
+from __future__ import annotations
 
 import json
 import os

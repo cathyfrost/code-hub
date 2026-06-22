@@ -2,6 +2,7 @@
 标签映射引擎
 职责：将 K-Means 簇 ID + 帖子关键词 → 人类可读标签列表
 """
+from __future__ import annotations
 
 import json
 import os
