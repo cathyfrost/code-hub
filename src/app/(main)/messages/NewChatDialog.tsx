@@ -28,6 +28,24 @@ interface NewChatDialogProps {
   onChatCreated: () => void;
 }
 
+/**
+ * 根据成员 id 列表生成稳定、合法的 channelId。
+ * - 成员顺序无关：先排序，保证同一组人得到同一个 id
+ * - 符合 Stream 规则（只含 a-z0-9 等，长度 ≤ 64）：用 djb2 哈希压短
+ *
+ * 用显式 channelId 而非 distinct 频道（只给 members），可避免频道被删除后
+ * 普通用户重建时触发 "RecreateChannel not allowed" 的 403 权限错误。
+ */
+function buildChannelId(memberIds: string[]): string {
+  const key = [...memberIds].sort().join("_");
+  let hash = 5381;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 33) ^ key.charCodeAt(i);
+  }
+  const hashStr = (hash >>> 0).toString(36);
+  return `ch_${hashStr}`;
+}
+
 export default function NewChatDialog({
   onOpenChange,
   onChatCreated,
@@ -60,8 +78,13 @@ export default function NewChatDialog({
         json: { userIds: selectedUsers.map((u) => u.id) },
       });
 
-      const channel = client.channel("messaging", {
-        members: [loggedInUser.id, ...selectedUsers.map((u) => u.id)],
+      const memberIds = [loggedInUser.id, ...selectedUsers.map((u) => u.id)];
+
+      // 生成稳定且合法的 channelId（成员顺序无关），避免 distinct 频道的重建权限问题
+      const channelId = buildChannelId(memberIds);
+
+      const channel = client.channel("messaging", channelId, {
+        members: memberIds,
         name:
           selectedUsers.length > 1
             ? loggedInUser.displayName +
